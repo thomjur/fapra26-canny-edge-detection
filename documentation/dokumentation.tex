@@ -1,0 +1,293 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[ngerman]{babel}
+\usepackage{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{parskip}
+\usepackage{siunitx}
+\usepackage{dirtree}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usepackage{pgfplotstable}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{tikz}
+
+\geometry{margin=2.5cm}
+
+\lstdefinestyle{cuda}{
+    language=C++,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{gray}\itshape,
+    stringstyle=\color{teal},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    frame=single,
+    breaklines=true,
+    captionpos=b,
+    tabsize=4
+}
+
+\title{\textbf{Praktikumsbericht -- Projekt} \\[0.5em]
+\large Canny Edge Detection auf der GPU}
+\author{Matthias Stefan \and Thomas Jurczyk}
+\date{\today}
+
+\begin{document}
+
+    \maketitle
+    \tableofcontents
+    \newpage
+
+% ════════════════════════════════════════════════════════════════════════════
+    \section{Voraussetzungen und Projektaufbau}
+% ════════════════════════════════════════════════════════════════════════════
+
+    \subsection{Hardware-Spezifikationen}
+
+    \subsubsection*{System: Matthias Stefan}
+
+    \subsubsection*{System: Thomas Jurczyk}
+
+    \subsection{Projektstruktur}
+
+    \subsection{Build-System und Kompilierung}
+
+    \newpage
+
+% ════════════════════════════════════════════════════════════════════════════
+    \section{Algorithmus}
+% ════════════════════════════════════════════════════════════════════════════
+
+    \subsection{Überblick}
+
+    Der Canny-Algorithmus ist ein mehrstufiges Verfahren zur Kantendetektion in
+    Graustufenbildern. Canny definiert drei Kriterien für einen optimalen
+    Kantendetektor: gute Detektion, präzise Lokalisierung sowie exakt eine Antwort
+    pro Kante -- jede Kante soll auf eine Breite von einem Pixel supprimiert werden
+    \cite[S.~680]{canny1986}. Die Verarbeitung erfolgt in vier aufeinanderfolgenden
+    Schritten, wobei der Output jedes Schritts als Input des nächsten dient
+    (siehe Abbildung~\ref{fig:pipeline}). Die einzelnen Schritte werden in den
+    kommenden Abschnitten näher erläutert.
+
+    \begin{figure}[h]
+        \centering
+        \resizebox{\textwidth}{!}{
+            \begin{tikzpicture}[
+                box/.style={rectangle, draw, rounded corners, minimum width=2.8cm,
+                minimum height=1cm, align=center, font=\small},
+                arrow/.style={->, thick}
+            ]
+        \node[box, fill=gray!20]   (input)  at (0,0)    {Eingabebild};
+        \node[box, fill=blue!15]   (blur)   at (3.5,0)  {Schritt 1\\Gaussian Blur};
+        \node[box, fill=teal!15]   (sobel)  at (7,0)    {Schritt 2\\Gradient (Sobel)};
+        \node[box, fill=orange!15] (nms)    at (10.5,0) {Schritt 3\\Non-Max. Supp.};
+        \node[box, fill=red!15]    (hyst)   at (14,0)   {Schritt 4\\Hysteresis};
+        \node[box, fill=gray!20]   (output) at (17.5,0) {Kantenbild};
+
+        \draw[arrow] (input)  -- (blur);
+        \draw[arrow] (blur)   -- (sobel);
+        \draw[arrow] (sobel)  -- (nms);
+        \draw[arrow] (nms)    -- (hyst);
+        \draw[arrow] (hyst)   -- (output);
+            \end{tikzpicture}
+        }
+        \caption{Canny Edge Detection Pipeline}
+        \label{fig:pipeline}
+    \end{figure}
+
+    \subsection{Details}
+
+    \subsubsection{Schritt 1: Gaussian Blur}
+
+    Um einen mathematisch optimalen Kantendetektor herzuleiten, trifft Canny
+    eine Annahme über das Rauschen im Bild: \textit{,,We will assume that the
+    image consists of the edge and additive white Gaussian noise``}
+    \cite[S.~680]{canny1986}. Da dieses Rauschen fälschlicherweise als Kante
+    detektiert werden kann, muss das Bild zunächst geglättet werden. Canny
+    zeigt, dass der optimale Filter für dieses Rauschmodell durch die erste
+    Ableitung einer Gaußfunktion approximiert werden kann
+    \cite[S.~687]{canny1986}:
+
+    \begin{equation}
+        \label{eq:gaussian}
+        G(x) = \exp\left(-\frac{x^2}{2\sigma^2}\right)
+    \end{equation}
+
+    Der Parameter $\sigma$ kontrolliert die Stärke der Glättung. Zwischen
+    Rauschunterdrückung und Lokalisierungsgenauigkeit besteht jedoch ein
+    grundlegender Zielkonflikt -- Canny bezeichnet dies als
+    \textit{,,uncertainty principle``} zwischen Detektion und Lokalisierung
+    \cite[S.~684]{canny1986}.
+
+    \subsubsection{Schritt 2: Gradient Berechnung (Sobel)}
+
+    \subsubsection{Schritt 3: Non-Maximum Suppression}
+
+    \subsubsection{Schritt 4: Hysteresis Thresholding}
+
+    \newpage
+
+% ════════════════════════════════════════════════════════════════════════════
+    \section{Implementierung}
+% ════════════════════════════════════════════════════════════════════════════
+
+    \subsection{Naive Implementierung}
+
+    \subsubsection{Schritt 1: Gaussian Blur}
+
+    Die Gaußgewichte werden zunächst auf der CPU als zweidimensionales Raster der
+    Größe $(2 \cdot \texttt{blur\_radius} + 1)$ vorberechnet und
+    zwischengespeichert -- jeder Eintrag enthält das normalisierte Gaußgewicht
+    für den entsprechenden Versatz $(i, j)$ relativ zum Zielpixel
+    (Gleichung~\ref{eq:gaussian}). Die Funktion
+    \texttt{calculate\_gaussian\_weights()} erhält dazu als Parameter
+    \texttt{blur\_radius} sowie \texttt{sigma} zur Steuerung der Glättungsstärke.
+    Nach der Auswertung werden die Gewichte normalisiert, sodass ihre Summe~1
+    ergibt und die Helligkeit des Bildes erhalten bleibt. Das Gewichtsraster wird
+    einmalig vor dem Kernelaufruf auf die GPU übertragen und steht dort allen
+    Threads als gemeinsam genutzter Read-only-Buffer zur Verfügung -- so wird
+    vermieden, dass die Gewichte für jeden Pixel neu berechnet werden müssen.
+    Das resultierende $3 \times 3$ Gewichtsraster ist in
+    Abbildung~\ref{fig:gaussian_example} links in Rot dargestellt.
+
+    \begin{figure}[h]
+        \centering
+        \begin{tikzpicture}[
+            pixel/.style={rectangle, draw, minimum size=1.3cm, align=center, font=\small, inner sep=2pt},
+            k_low/.style={pixel,  fill=red!20},
+            k_mid/.style={pixel,  fill=red!35},
+            k_high/.style={pixel, fill=red!55}
+        ]
+
+            \node[k_low]  at (0,0)      {0.0894};
+            \node[k_mid]  at (1.4,0)    {0.1201};
+            \node[k_low]  at (2.8,0)    {0.0894};
+            \node[k_mid]  at (0,-1.4)   {0.1201};
+            \node[k_high] at (1.4,-1.4) {0.1615};
+            \node[k_mid]  at (2.8,-1.4) {0.1201};
+            \node[k_low]  at (0,-2.8)   {0.0894};
+            \node[k_mid]  at (1.4,-2.8) {0.1201};
+            \node[k_low]  at (2.8,-2.8) {0.0894};
+
+            \node[font=\Large] at (4.0,-1.4) {$\times$};
+
+            \node[pixel, fill=black!90, text=white] at (5.3,0)    {L10};
+            \node[pixel, fill=black!70, text=white] at (6.7,0)    {L20};
+            \node[pixel, fill=black!50, text=white] at (8.1,0)    {L30};
+            \node[pixel, fill=black!45, text=white] at (5.3,-1.4) {L50};
+            \node[pixel, fill=black!50, text=white] at (6.7,-1.4) {L48};
+            \node[pixel, fill=black!90, text=white] at (8.1,-1.4) {L10};
+            \node[pixel, fill=black!10]             at (5.3,-2.8) {L90};
+            \node[pixel, fill=black!60, text=white] at (6.7,-2.8) {L30};
+            \node[pixel, fill=black!70, text=white] at (8.1,-2.8) {L20};
+
+            \node[font=\Large] at (9.4,-1.4) {$=$};
+
+            \node[pixel, fill=black!55, text=white] at (10.7,-1.4) {L34};
+
+        \end{tikzpicture}
+        \caption{Gaussian Blur -- gewichteter Mittelwert am Beispielpixel L48 $\rightarrow$ L34}
+        \label{fig:gaussian_example}
+    \end{figure}
+
+    Die eigentliche Filterung findet im CUDA-Kernel \texttt{gaussian\_filter()}
+    statt. Jeder Thread ist für genau einen Ausgabepixel zuständig -- die
+    Thread-Position im Bild ergibt sich aus \texttt{blockIdx} und
+    \texttt{threadIdx} (Listing~\ref{lst:gaussian_kernel}, Zeile~1--2). Threads
+    außerhalb des Bildrandes werden sofort verworfen (Zeile~3). Anschließend
+    iteriert jeder Thread über das Gewichtsraster und akkumuliert den gewichteten
+    Mittelwert der Nachbarpixel (Zeile~5--10). Pixel außerhalb des Bildrandes
+    werden dabei auf~0 gesetzt (Zero-Padding). Das Ergebnis wird abschließend
+    in den Ausgabepuffer geschrieben (Zeile~12), wie in
+    Abbildung~\ref{fig:gaussian_example} rechts dargestellt.
+
+    \begin{lstlisting}[style=cuda, basicstyle=\ttfamily\scriptsize,
+        caption={Pseudocode -- gaussian\_filter Kernel},
+        label={lst:gaussian_kernel}, numbers=left]
+x = blockIdx.x * blockDim.x + threadIdx.x
+y = blockIdx.y * blockDim.y + threadIdx.y
+if (x, y) ausserhalb des Bildes: return
+
+color = 0.0
+for j = -radius to +radius:
+    for i = -radius to +radius:
+        if (x+i, y+j) innerhalb des Bildes:
+            pixel = src_buffer[(y+j) * width + (x+i)]
+        color += pixel * weights[(j+r) * blur_size + (i+r)]
+
+out_buffer[y * width + x] = color
+    \end{lstlisting}
+
+    In der naiven Implementierung greift jeder Thread dabei wiederholt auf den
+    globalen GPU-Speicher zu. Da benachbarte Threads überlappende Pixelbereiche
+    lesen, werden dieselben Pixel mehrfach aus dem langsamen DRAM geladen --
+    dies motiviert die spätere Optimierung mit Shared Memory
+    (siehe Abschnitt~\ref{sec:shared_memory_gaussian}).
+
+    Das Ergebnis der Filterung ist in Abbildung~\ref{fig:gaussian_result}
+    dargestellt.
+
+    \begin{figure}[h]
+        \centering
+        \begin{minipage}[b]{0.45\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../assets/maple-leaf-black-5120x2880.jpg}
+        \end{minipage}
+        \hfill
+        \begin{minipage}[b]{0.45\textwidth}
+            \centering
+            \includegraphics[width=\textwidth]{../assets/maple-leaf-black-5120x2880-s1.jpg}
+        \end{minipage}
+        \caption{Vergleich Original (links) vs.\ Gaussian Blur (rechts,
+            $\sigma = 6.3$, radius $= 9$)}
+        \label{fig:gaussian_result}
+    \end{figure}
+
+    \subsubsection{Shared Memory: Gaussian Blur}
+    \label{sec:shared_memory_gaussian}
+
+
+
+    \subsubsection{Schritt 2: Gradient Berechnung (Sobel)}
+
+    \subsubsection{Schritt 3: Non-Maximum Suppression}
+
+    \subsubsection{Schritt 4: Hysteresis Thresholding}
+
+    \subsection{Optimierungen}
+
+
+
+    \newpage
+
+% ════════════════════════════════════════════════════════════════════════════
+    \section{Ergebnisse und Analyse}
+% ════════════════════════════════════════════════════════════════════════════
+
+    \subsection{Korrektheit}
+
+    \subsection{Performance-Messungen}
+
+    \subsection{Analyse}
+
+    \newpage
+
+% ════════════════════════════════════════════════════════════════════════════
+    \section{Fazit}
+% ════════════════════════════════════════════════════════════════════════════
+
+    \newpage
+
+    \bibliographystyle{plain}
+    \bibliography{references}
+
+\end{document}
