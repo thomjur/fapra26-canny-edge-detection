@@ -238,17 +238,12 @@ out_buffer[y * width + x] = color
 
     \begin{figure}[h]
         \centering
-        \begin{minipage}[b]{0.45\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{../assets/maple-leaf-black-5120x2880.jpg}
-        \end{minipage}
-        \hfill
-        \begin{minipage}[b]{0.45\textwidth}
-            \centering
-            \includegraphics[width=\textwidth]{../assets/maple-leaf-black-5120x2880-s1.jpg}
-        \end{minipage}
+        \includegraphics[width=0.7\textwidth]{../assets/maple-leaf-black-5120x2880-cmp-original-gaussian.jpg}
         \caption{Vergleich Original (links) vs.\ Gaussian Blur (rechts,
-            $\sigma = 6.3$, radius $= 9$)}
+            $\sigma = 25$, radius $= 12$). Die Parameter wurden bewusst extrem
+            gewählt, um den Unterschied deutlicher sichtbar zu machen -- in den
+            weiteren Verarbeitungsschritten wird ein deutlich sanfterer Filter
+            verwendet.}
         \label{fig:gaussian_result}
     \end{figure}
 
