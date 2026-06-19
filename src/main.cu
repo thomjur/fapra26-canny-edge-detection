@@ -24,6 +24,10 @@
 //         - two thresholds (high/low) to determine real edges
 //
 
+//
+// >>> GAUSSIAN FILTER <<<
+//
+
 /**
  * @brief Applies a gaussian blur to a grayscale image.
  *
@@ -114,6 +118,21 @@ void calculate_gaussian_weights(
         out_weights[i] /= weight_sum;
 }
 
+//
+// >>> SOBEL FILTER <<<
+//
+
+//
+// >>> NON-MAXIMUM SUPPRESSION <<<
+//
+
+//
+// >>> HYSTERESIS THRESHOLDING <<<
+//
+
+//
+// >>> MAIN <<<
+//
 
 int main(int argc, const char **argv)
 {
@@ -126,10 +145,6 @@ int main(int argc, const char **argv)
     const char* path     = argv[1];
     const char* out_path = argv[2];
 
-    //
-    // load image
-    //
-
     int32_t width{};
     int32_t height{};
     int32_t channels_in_file{};
@@ -137,24 +152,22 @@ int main(int argc, const char **argv)
     if (host_src_image_buffer == nullptr)
         return -1;
 
+    //
+    // >>> GAUSSIAN FILTER <<<
+    //
+
     printf("Image loaded : %s\n", path);
     printf("Size         : %d x %d\n", width, height);
     printf("Channels     : %d (loaded as grayscale)\n", channels_in_file);
 
-    //
     // blur weights
-    //
-
     constexpr uint32_t blur_radius = 9;
     constexpr float sigma = 6.3f;
     constexpr uint32_t blur_size = blur_radius * 2 + 1;
     float weights[blur_size * blur_size];
     calculate_gaussian_weights(blur_radius, sigma, weights);
 
-    //
     // prepare cuda resources
-    //
-
     constexpr uint32_t BLOCK_SIZE = 16;
     dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
     dim3 grid_dim(
@@ -172,10 +185,7 @@ int main(int argc, const char **argv)
     CUDA_THROW_IF_FAILED(cudaMemcpy(device_weights, weights, blur_size * blur_size * sizeof(float), cudaMemcpyHostToDevice));
     CUDA_THROW_IF_FAILED(cudaMemset(device_dst_buffer, 0, width * height * sizeof(uint8_t)));
 
-    //
-    // kernels (blur)
-    //
-
+    // kernel
     gaussian_filter<<<grid_dim, block_dim>>>(
         device_src_buffer,
         width,
@@ -186,41 +196,50 @@ int main(int argc, const char **argv)
     CUDA_THROW_IF_FAILED(cudaDeviceSynchronize());
 
     //
-    // get output
+    // >>> SOBEL FILTER <<<
     //
 
-    auto* host_blurred_buffer = static_cast<uint8_t*>(malloc(width * height * sizeof(uint8_t)));
+    //
+    // >>> NON-MAXIMUM SUPPRESSION <<<
+    //
+
+    //
+    // >>> HYSTERESIS THRESHOLDING <<<
+    //
+
+    //
+    // RESULT
+    //
+
+    auto* result_buffer = static_cast<uint8_t*>(malloc(width * height * sizeof(uint8_t)));
     CUDA_THROW_IF_FAILED(cudaMemcpy(
-        host_blurred_buffer,
+        result_buffer,
         device_dst_buffer,
         width * height * sizeof(uint8_t),
         cudaMemcpyDeviceToHost));
     CUDA_THROW_IF_FAILED(cudaFree(device_weights));
 
-    //
     // write image
-    //
-
     const int32_t write_result = stbi_write_png(
         out_path,
         width,
         height,
         1,
-        host_blurred_buffer,
+        result_buffer,
         width * 1);
     if (write_result == 0)
     {
         fprintf(stderr, "Error: could not write image '%s'\n", out_path);
-        stbi_image_free(static_cast<void*>(const_cast<uint8_t*>(host_blurred_buffer)));
+        stbi_image_free(static_cast<void*>(const_cast<uint8_t*>(result_buffer)));
         return -1;
     }
-    printf("Grayscale written : %s\n", out_path);
-
+    printf("Result written : %s\n", out_path);
+    free(result_buffer);
+    
     //
-    // clean up
+    // CLEAN UP
     //
-
-    free(host_blurred_buffer);
+    
     stbi_image_free(static_cast<void*>(const_cast<uint8_t*>(host_src_image_buffer)));
     CUDA_THROW_IF_FAILED(cudaFree(device_src_buffer));
     CUDA_THROW_IF_FAILED(cudaFree(device_dst_buffer));
