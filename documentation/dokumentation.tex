@@ -177,26 +177,20 @@
     \section{Implementierung}
 % ════════════════════════════════════════════════════════════════════════════
 
-    \subsection{Naive Implementierung}
+    \subsection{Schritt 1: Gaussian Blur}
 
-    \subsubsection{Schritt 1: Gaussian Blur}
+    \subsubsection{Naive Implementierung}
 
     Die Gaußgewichte werden zunächst auf der CPU als zweidimensionales Raster der
-    Größe $(2 \cdot \texttt{blur\_radius} + 1)$ vorberechnet und
-    zwischengespeichert -- jeder Eintrag enthält das normalisierte Gaußgewicht
-    für den entsprechenden Versatz $(i, j)$ relativ zum Zielpixel
-    (Gleichung~\ref{eq:gaussian}). Die Funktion
-    \texttt{calculate\_gaussian\_weights()} erhält dazu als Parameter
-    \texttt{blur\_radius} sowie \texttt{sigma} zur Steuerung der Glättungsstärke.
-    Nach der Auswertung werden die Gewichte normalisiert, sodass ihre Summe~1
-    ergibt und die Helligkeit des Bildes erhalten bleibt. Das Gewichtsraster wird
-    einmalig vor dem Kernelaufruf auf die GPU übertragen und steht dort allen
-    Threads als gemeinsam genutzter Read-only-Buffer zur Verfügung -- so wird
-    vermieden, dass die Gewichte für jeden Pixel neu berechnet werden müssen.
-    Das resultierende $3 \times 3$ Gewichtsraster ist in
-    Abbildung~\ref{fig:gaussian_example} links in Rot dargestellt.
+    Größe $(2 \cdot \texttt{BLUR\_RADIUS} + 1)^2$ vorberechnet und normalisiert,
+    sodass ihre Summe~1 ergibt und die Bildhelligkeit erhalten bleibt
+    (Gleichung~\ref{eq:gaussian}). Das Gewichtsraster wird einmalig vor dem
+    Kernelaufruf per \texttt{cudaMemcpy} auf die GPU übertragen und steht dort
+    allen Threads als Read-only-Buffer im globalen Speicher zur Verfügung.
+    Das resultierende $3 \times 3$ Gewichtsraster für $\sigma = 1.0$ ist in
+    Abbildung~\ref{fig:gaussian_example} dargestellt.
 
-    \begin{figure}[h]
+    \begin{figure}[H]
         \centering
         \begin{tikzpicture}[
             pixel/.style={rectangle, draw, minimum size=1.3cm, align=center, font=\small, inner sep=2pt},
@@ -205,50 +199,48 @@
             k_high/.style={pixel, fill=red!55}
         ]
 
-            \node[k_low]  at (0,0)      {0.0894};
-            \node[k_mid]  at (1.4,0)    {0.1201};
-            \node[k_low]  at (2.8,0)    {0.0894};
-            \node[k_mid]  at (0,-1.4)   {0.1201};
-            \node[k_high] at (1.4,-1.4) {0.1615};
-            \node[k_mid]  at (2.8,-1.4) {0.1201};
-            \node[k_low]  at (0,-2.8)   {0.0894};
-            \node[k_mid]  at (1.4,-2.8) {0.1201};
-            \node[k_low]  at (2.8,-2.8) {0.0894};
+    \node[k_low]  at (0,0)      {0.0894};
+    \node[k_mid]  at (1.4,0)    {0.1201};
+    \node[k_low]  at (2.8,0)    {0.0894};
+    \node[k_mid]  at (0,-1.4)   {0.1201};
+    \node[k_high] at (1.4,-1.4) {0.1615};
+    \node[k_mid]  at (2.8,-1.4) {0.1201};
+    \node[k_low]  at (0,-2.8)   {0.0894};
+    \node[k_mid]  at (1.4,-2.8) {0.1201};
+    \node[k_low]  at (2.8,-2.8) {0.0894};
 
-            \node[font=\Large] at (4.0,-1.4) {$\times$};
+    \node[font=\Large] at (4.0,-1.4) {$\times$};
 
-            \node[pixel, fill=black!90, text=white] at (5.3,0)    {L10};
-            \node[pixel, fill=black!70, text=white] at (6.7,0)    {L20};
-            \node[pixel, fill=black!50, text=white] at (8.1,0)    {L30};
-            \node[pixel, fill=black!45, text=white] at (5.3,-1.4) {L50};
-            \node[pixel, fill=black!50, text=white] at (6.7,-1.4) {L48};
-            \node[pixel, fill=black!90, text=white] at (8.1,-1.4) {L10};
-            \node[pixel, fill=black!10]             at (5.3,-2.8) {L90};
-            \node[pixel, fill=black!60, text=white] at (6.7,-2.8) {L30};
-            \node[pixel, fill=black!70, text=white] at (8.1,-2.8) {L20};
+    \node[pixel, fill=black!90, text=white] at (5.3,0)    {L10};
+    \node[pixel, fill=black!70, text=white] at (6.7,0)    {L20};
+    \node[pixel, fill=black!50, text=white] at (8.1,0)    {L30};
+    \node[pixel, fill=black!45, text=white] at (5.3,-1.4) {L50};
+    \node[pixel, fill=black!50, text=white] at (6.7,-1.4) {L48};
+    \node[pixel, fill=black!90, text=white] at (8.1,-1.4) {L10};
+    \node[pixel, fill=black!10]             at (5.3,-2.8) {L90};
+    \node[pixel, fill=black!60, text=white] at (6.7,-2.8) {L30};
+    \node[pixel, fill=black!70, text=white] at (8.1,-2.8) {L20};
 
-            \node[font=\Large] at (9.4,-1.4) {$=$};
+    \node[font=\Large] at (9.4,-1.4) {$=$};
 
-            \node[pixel, fill=black!55, text=white] at (10.7,-1.4) {L34};
+    \node[pixel, fill=black!55, text=white] at (10.7,-1.4) {L34};
 
         \end{tikzpicture}
-        \caption{Gaussian Blur -- gewichteter Mittelwert am Beispielpixel L48 $\rightarrow$ L34}
+        \caption{Gaussian Blur, gewichteter Mittelwert am Beispielpixel L48 $\rightarrow$ L34}
         \label{fig:gaussian_example}
     \end{figure}
 
-    Die eigentliche Filterung findet im CUDA-Kernel \texttt{gaussian\_filter()}
-    statt. Jeder Thread ist für genau einen Ausgabepixel zuständig -- die
-    Thread-Position im Bild ergibt sich aus \texttt{blockIdx} und
-    \texttt{threadIdx} (Listing~\ref{lst:gaussian_kernel}, Zeile~1--2). Threads
-    außerhalb des Bildrandes werden sofort verworfen (Zeile~3). Anschließend
-    iteriert jeder Thread über das Gewichtsraster und akkumuliert den gewichteten
-    Mittelwert der Nachbarpixel (Zeile~5--10). Pixel außerhalb des Bildrandes
-    werden dabei auf~0 gesetzt (Zero-Padding). Das Ergebnis wird abschließend
-    in den Ausgabepuffer geschrieben (Zeile~12), wie in
-    Abbildung~\ref{fig:gaussian_example} rechts dargestellt.
+    Im CUDA-Kernel \texttt{gaussian\_filter()} ist jeder Thread für genau einen
+    Ausgabepixel zuständig. Die Thread-Position ergibt sich aus \texttt{blockIdx}
+    und \texttt{threadIdx} (Listing~\ref{lst:gaussian_kernel}, Zeile~1--2), Threads
+    außerhalb der Bildgrenzen werden sofort verworfen (Zeile~3). Jeder Thread
+    iteriert anschließend über alle $(2r+1)^2$ Nachbarpixel, liest jeden Wert
+    direkt aus dem globalen Speicher und akkumuliert die gewichtete Summe
+    (Zeile~5--10). Pixel außerhalb der Bildgrenzen werden mit~0 aufgefüllt
+    (Zero-Padding). Das Ergebnis wird in den Ausgabepuffer geschrieben (Zeile~12).
 
     \begin{lstlisting}[style=cuda, basicstyle=\ttfamily\scriptsize,
-        caption={Pseudocode -- gaussian\_filter Kernel},
+        caption={Pseudocode, gaussian\_filter Kernel (naive)},
         label={lst:gaussian_kernel}, numbers=left]
 x = blockIdx.x * blockDim.x + threadIdx.x
 y = blockIdx.y * blockDim.y + threadIdx.y
@@ -264,34 +256,153 @@ for j = -radius to +radius:
 out_buffer[y * width + x] = color
     \end{lstlisting}
 
-    In der naiven Implementierung greift jeder Thread dabei wiederholt auf den
-    globalen GPU-Speicher zu. Da benachbarte Threads überlappende Pixelbereiche
-    lesen, werden dieselben Pixel mehrfach aus dem langsamen DRAM geladen --
-    dies motiviert die spätere Optimierung mit Shared Memory
-    (siehe Abschnitt~\ref{sec:shared_memory_gaussian}).
+    Das NCU-Profiling zeigt, dass 47\,\% aller Global Memory Zugriffe uncoalesced
+    sind, da benachbarte Threads in y-Richtung auf Adressen mit Abstand
+    \texttt{width} zugreifen. Dies motiviert die Shared Memory Optimierung in
+    Abschnitt~\ref{sec:shared_memory_gaussian}. Das Ergebnis der Filterung ist in
+    Abbildung~\ref{fig:gaussian_result} dargestellt.
 
-    Das Ergebnis der Filterung ist in Abbildung~\ref{fig:gaussian_result}
-    dargestellt.
-
-    \begin{figure}[h]
+    \begin{figure}[H]
         \centering
         \includegraphics[width=0.7\textwidth]{../assets/maple-leaf-black-5120x2880-cmp-original-gaussian.jpg}
         \caption{Vergleich Original (links) vs.\ Gaussian Blur (rechts,
-            $\sigma = 25$, radius $= 12$). Die Parameter wurden bewusst extrem
-            gewählt, um den Unterschied deutlicher sichtbar zu machen -- in den
-            weiteren Verarbeitungsschritten wird ein deutlich sanfterer Filter
-            verwendet.}
+            $\sigma = 25$, \texttt{BLUR\_RADIUS}$= 12$). Die Parameter wurden
+            bewusst extrem gewählt, um den Effekt deutlicher sichtbar zu machen,
+            in der Pipeline wird ein deutlich sanfterer Filter verwendet.}
         \label{fig:gaussian_result}
     \end{figure}
 
-    \subsubsection{Shared Memory: Gaussian Blur}
+    \subsubsection{Shared Memory Optimierung}
     \label{sec:shared_memory_gaussian}
 
+    Der zentrale Engpass der naiven Implementierung sind die uncoalesced Global
+    Memory Zugriffe: bei einem Kernel der Größe $(2r+1)^2$ liest jeder Thread
+    bis zu $(2r+1)^2$ Pixel aus dem DRAM, wobei Pixel die von mehreren
+    Threads benötigt werden redundant geladen werden. Horvath et al.\ adressieren
+    dieses Problem durch Shared Memory Tiling, bei dem Threads eines Blocks
+    kooperativ eine Bildkachel in den schnellen On-Chip Speicher laden, bevor die
+    eigentliche Faltung beginnt \cite[S.~2]{horvath2023}.
+
+    Die Kachel hat die Größe $(\texttt{BLOCK\_SIZE} + 2 \cdot
+    \texttt{BLUR\_RADIUS})^2$ und enthält neben den eigentlichen Ausgabepixeln
+    des Blocks auch den sogenannten Halo-Rand, also die Nachbarpixel, die für
+    die Randpixel des Blocks benötigt werden. Da die Kachel größer ist als der
+    Block selbst, lädt jeder Thread mittels eines Stride-Loops einen oder mehrere
+    Pixel in den Shared Memory. Nach dem Laden wird \texttt{\_\_syncthreads()}
+    aufgerufen, um sicherzustellen, dass alle Threads ihre Pixel geschrieben haben
+    bevor die Faltung beginnt. Die Gaußgewichte werden zusätzlich in
+    \texttt{\_\_constant\_\_} Memory ausgelagert, da alle Threads exakt dieselben
+    Gewichte lesen und \texttt{\_\_constant\_\_} Memory für uniforme Zugriffe
+    hardwareseitig gecacht wird.
+
+    Die drei wesentlichen Änderungen gegenüber der naiven Implementierung sind:
+
+    \begin{itemize}
+        \item \texttt{\_\_shared\_\_ uint8\_t tile[tile\_size * tile\_size]},
+        eine kooperativ geladene Bildkachel inklusive Halo-Rand der Breite
+        \texttt{BLUR\_RADIUS}
+        \item \texttt{\_\_syncthreads()}, eine Synchronisationsbarriere nach dem
+        kooperativen Laden, bevor ein Thread mit dem Lesen beginnt
+        \item \texttt{\_\_constant\_\_ float device\_weights[...]},
+        Gaußgewichte in Constant Memory statt Global Memory, Upload per
+        \texttt{cudaMemcpyToSymbol()} vor dem Kernelaufruf
+    \end{itemize}
+
+    Die NCU-Messungen in Abbildung~\ref{fig:gaussian_ncu} zeigen, dass der
+    Speedup stark vom \texttt{BLUR\_RADIUS} abhängt. Bei $r=2$ überwiegt der
+    \texttt{\_\_syncthreads()}-Overhead, da der eigentliche Blur-Loop mit
+    $(2 \cdot 2 + 1)^2 = 25$ Operationen zu günstig ist, um den
+    Synchronisationsaufwand zu amortisieren. Die Laufzeit steigt von 2.57\,ms
+    auf 12.54\,ms. Bei $r=9$ hingegen kehrt sich das Verhältnis um, die
+    $(2 \cdot 9 + 1)^2 = 361$ Operationen pro Pixel machen den redundanten
+    DRAM-Traffic zum dominanten Faktor. Die uncoalesced Global Memory Zugriffe
+    reduzieren sich von 322.9M auf 5.3M, und die Laufzeit sinkt von 34.12\,ms
+    auf 12.54\,ms, ein Speedup von 2.7$\times$.
+
+    \begin{figure}[H]
+        \centering
+        \begin{minipage}{0.32\textwidth}
+            \begin{tikzpicture}
+                \begin{axis}[
+                    ybar, bar width=10pt,
+                    title={SM Throughput (\%)},
+                title style={font=\footnotesize},
+                xtick={1,2,3,4},
+                xticklabels={n $r2$, s $r2$, n $r9$, s $r9$},
+                xticklabel style={font=\tiny, rotate=30, anchor=east},
+                width=\textwidth, height=6cm,
+                ymin=0, ymax=110,
+                nodes near coords, nodes near coords style={font=\tiny},
+                enlarge x limits=0.2,
+                ]
+                    \addplot[fill=green!25, bar shift=0pt] coordinates {(1,70.27)};
+                    \addplot[fill=green!60, bar shift=0pt] coordinates {(2,91.47)};
+                    \addplot[fill=blue!25,  bar shift=0pt] coordinates {(3,64.66)};
+                    \addplot[fill=blue!60,  bar shift=0pt] coordinates {(4,91.48)};
+                \end{axis}
+            \end{tikzpicture}
+        \end{minipage}
+        \hfill
+        \begin{minipage}{0.32\textwidth}
+            \begin{tikzpicture}
+                \begin{axis}[
+                    ybar, bar width=10pt,
+                    title={Uncoalesced Accesses (M)},
+                title style={font=\footnotesize},
+                xtick={1,2,3,4},
+                xticklabels={n $r2$, s $r2$, n $r9$, s $r9$},
+                xticklabel style={font=\tiny, rotate=30, anchor=east},
+                width=\textwidth, height=6cm,
+                ymin=0,
+                nodes near coords, nodes near coords style={font=\tiny},
+                enlarge x limits=0.2,
+                ]
+                    \addplot[fill=green!25, bar shift=0pt] coordinates {(1,21.1)};
+                    \addplot[fill=green!60, bar shift=0pt] coordinates {(2,5.3)};
+                    \addplot[fill=blue!25,  bar shift=0pt] coordinates {(3,322.9)};
+                    \addplot[fill=blue!60,  bar shift=0pt] coordinates {(4,5.3)};
+                \end{axis}
+            \end{tikzpicture}
+        \end{minipage}
+        \hfill
+        \begin{minipage}{0.32\textwidth}
+            \begin{tikzpicture}
+                \begin{axis}[
+                    ybar, bar width=10pt,
+                    title={Kernel Duration (ms)},
+                title style={font=\footnotesize},
+                xtick={1,2,3,4},
+                xticklabels={n $r2$, s $r2$, n $r9$, s $r9$},
+                xticklabel style={font=\tiny, rotate=30, anchor=east},
+                width=\textwidth, height=6cm,
+                ymin=0,
+                nodes near coords, nodes near coords style={font=\tiny},
+                enlarge x limits=0.2,
+                ]
+                    \addplot[fill=green!25, bar shift=0pt] coordinates {(1,2.57)};
+                    \addplot[fill=green!60, bar shift=0pt] coordinates {(2,12.54)};
+                    \addplot[fill=blue!25,  bar shift=0pt] coordinates {(3,34.12)};
+                    \addplot[fill=blue!60,  bar shift=0pt] coordinates {(4,12.54)};
+                \end{axis}
+            \end{tikzpicture}
+        \end{minipage}
+
+        \vspace{0.5em}
+        \noindent\footnotesize
+        \textcolor{green!40}{$\blacksquare$}~naive $r{=}2$\quad
+        \textcolor{green!70}{$\blacksquare$}~shared $r{=}2$\quad
+        \textcolor{blue!35}{$\blacksquare$}~naive $r{=}9$\quad
+        \textcolor{blue!70}{$\blacksquare$}~shared $r{=}9$
+
+        \caption{NCU-Profiling, Vergleich naive vs.\ Shared Memory bei $r{=}2$ und
+            $r{=}9$ auf einer RTX~2060. n~=~naive, s~=~shared.}
+        \label{fig:gaussian_ncu}
+    \end{figure}
 
 
-    \subsubsection{Schritt 2: Gradient Berechnung (Sobel)}
+    \subsection{Schritt 2: Gradient Berechnung (Sobel)}
 
-    \subsubsection{Schritt 3: Non-Maximum Suppression}
+    \subsection{Schritt 3: Non-Maximum Suppression}
 
     Die Non-Maximum Suppression wird im CUDA-Kernel
     \texttt{non\_maximum\_suppression()} umgesetzt. Jeder Thread ist dabei für
@@ -422,9 +533,7 @@ __global__ void non_maximum_suppression(
     \end{figure}
 
 
-    \subsubsection{Schritt 4: Hysteresis Thresholding}
-
-    \subsection{Optimierungen}
+    \subsection{Schritt 4: Hysteresis Thresholding}
 
 
 
