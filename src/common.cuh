@@ -13,3 +13,6 @@
 			exit(EXIT_FAILURE);                             \
 		}                                                   \
 	} while (0)
+
+/// Block size for all CUDA kernels (16x16 = 256 threads per block).
+#define BLOCK_SIZE 16
