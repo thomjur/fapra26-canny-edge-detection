@@ -26,7 +26,8 @@
 //         - two thresholds (high/low) to determine real edges
 //
 
-
+// 200 runs for stable avg — reduce to ~10 when profiling with NCU
+#define GAUSSIAN_BENCHMARK_RUNS 1
 int main(int argc, const char **argv)
 {
     if (argc < 3)
@@ -38,15 +39,10 @@ int main(int argc, const char **argv)
     const char* path     = argv[1];
     const char* out_path = argv[2];
 
-    //
-    // LOAD IMAGE
-    //
-
-    int32_t width{};
-    int32_t height{};
-    int32_t channels_in_file{};
-    const uint8_t* host_src_image_buffer = stbi_load(path, &width, &height, &channels_in_file, 1);
-    if (host_src_image_buffer == nullptr)
+    // load image as grayscale
+    int32_t width{}, height{}, channels_in_file{};
+    const uint8_t* host_src = stbi_load(path, &width, &height, &channels_in_file, 1);
+    if (host_src == nullptr)
         return -1;
 
     printf("Image loaded : %s\n", path);
@@ -57,103 +53,69 @@ int main(int argc, const char **argv)
     // >>> GAUSSIAN FILTER <<<
     //
 
-    // blur weights
-    constexpr float sigma = 1.4f;
-    constexpr uint32_t blur_size = BLUR_RADIUS * 2 + 1;
-    float weights[blur_size * blur_size];
-    calculate_gaussian_weights(BLUR_RADIUS, sigma, weights);
-
-    // prepare cuda resources
-    dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid_dim(
-        static_cast<uint32_t>(std::ceil(static_cast<float>(width) / static_cast<float>(BLOCK_SIZE))),
-        static_cast<uint32_t>(std::ceil(static_cast<float>(height) / static_cast<float>(BLOCK_SIZE))));
-
-    uint8_t* device_src_buffer;
-    uint8_t* device_dst_buffer;
-    CUDA_THROW_IF_FAILED(cudaMalloc(&device_src_buffer, width * height * sizeof(uint8_t)));
-    CUDA_THROW_IF_FAILED(cudaMalloc(&device_dst_buffer, width * height * sizeof(uint8_t)));
-    CUDA_THROW_IF_FAILED(cudaMemcpy(device_src_buffer, host_src_image_buffer, width * height * sizeof(uint8_t), cudaMemcpyHostToDevice));
-    CUDA_THROW_IF_FAILED(cudaMemset(device_dst_buffer, 0, width * height * sizeof(uint8_t)));
-
-#ifdef GAUSSIAN_NAIVE
-    float* device_weights = nullptr;
-    CUDA_THROW_IF_FAILED(cudaMalloc(&device_weights, blur_size * blur_size * sizeof(float)));
-    CUDA_THROW_IF_FAILED(cudaMemcpy(device_weights, weights, blur_size * blur_size * sizeof(float), cudaMemcpyHostToDevice));
-#endif // #ifdef GAUSSIAN_NAIVE
-
-#ifdef GAUSSIAN_SHARED
-    CUDA_THROW_IF_FAILED(cudaMemcpyToSymbol(device_weights, weights, blur_size * blur_size * sizeof(float)));
-#endif // #ifdef GAUSSIAN_SHARED
-
-    // kernel
-#ifdef GAUSSIAN_NAIVE
-    gaussian_filter<<<grid_dim, block_dim>>>(
-        device_src_buffer,
-        width,
-        height,
-        device_weights,
-        BLUR_RADIUS,
-        device_dst_buffer);
-#endif // #ifdef GAUSSIAN_NAIVE
-
-#ifdef GAUSSIAN_SHARED
-    gaussian_filter<<<grid_dim, block_dim>>>(
-        device_src_buffer,
-        width,
-        height,
-        device_dst_buffer);
-#endif // #ifdef GAUSSIAN_SHARED
-
-    CUDA_THROW_IF_FAILED(cudaDeviceSynchronize());
-
-    //
-    //
-    // NEXT
-    //
-    //
-
-    //
-    // GET OUTPUT
-    //
-
-    auto* host_blurred_buffer = static_cast<uint8_t*>(malloc(width * height * sizeof(uint8_t)));
-    CUDA_THROW_IF_FAILED(cudaMemcpy(
-        host_blurred_buffer,
-        device_dst_buffer,
-        width * height * sizeof(uint8_t),
-        cudaMemcpyDeviceToHost));
-#ifdef GAUSSIAN_NAIVE
-    CUDA_THROW_IF_FAILED(cudaFree(device_weights));
-#endif
-
-    //
-    // WRITE IMAGE
-    //
-
-    const int32_t write_result = stbi_write_png(
-        out_path,
-        width,
-        height,
-        1,
-        host_blurred_buffer,
-        width * 1);
-    if (write_result == 0)
+    // Warm-up
     {
-        fprintf(stderr, "Error: could not write image '%s'\n", out_path);
-        stbi_image_free(static_cast<void*>(const_cast<uint8_t*>(host_blurred_buffer)));
-        return -1;
+        GaussianResult warm_up = gaussian_execute(host_src, width, height);
+        printf("--- Gaussian Filter (warm-up run) ---\n");
+        printf("H->D:   %.3f ms\n", warm_up.ms_h2d);
+        printf("Kernel: %.3f ms\n", warm_up.ms_kernel);
+        printf("D->H:   %.3f ms\n", warm_up.ms_d2h);
+        printf("Total:  %.3f ms\n", warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
+        gaussian_cleanup(warm_up);
     }
-    printf("Grayscale written : %s\n", out_path);
+
+    // Gaussian Runs
+    float total_h2d = 0, total_kernel = 0, total_d2h = 0;
+    GaussianResult gaussian{};
+    for (int i = 0; i < GAUSSIAN_BENCHMARK_RUNS; i++)
+    {
+        if (i > 0) gaussian_cleanup(gaussian);
+        gaussian = gaussian_execute(host_src, width, height);
+        total_h2d    += gaussian.ms_h2d;
+        total_kernel += gaussian.ms_kernel;
+        total_d2h    += gaussian.ms_d2h;
+    }
+
+    printf("--- Gaussian Filter (%d runs avg) ---\n", GAUSSIAN_BENCHMARK_RUNS);
+    printf("H->D:   %.3f ms\n", total_h2d    / GAUSSIAN_BENCHMARK_RUNS);
+    printf("Kernel: %.3f ms\n", total_kernel / GAUSSIAN_BENCHMARK_RUNS);
+    printf("D->H:   %.3f ms\n", total_d2h    / GAUSSIAN_BENCHMARK_RUNS);
+    printf("Total:  %.3f ms\n", (total_h2d + total_kernel + total_d2h) / GAUSSIAN_BENCHMARK_RUNS);
 
     //
-    // CLEAN UP
+    // >>> SOBEL FILTER <<<
     //
 
-    free(host_blurred_buffer);
-    stbi_image_free(static_cast<void*>(const_cast<uint8_t*>(host_src_image_buffer)));
-    CUDA_THROW_IF_FAILED(cudaFree(device_src_buffer));
-    CUDA_THROW_IF_FAILED(cudaFree(device_dst_buffer));
+    // TODO
 
-    return 0;
+    //
+    // >>> NON-MAXIMUM SUPPRESSION <<<
+    //
+
+    // TODO
+
+    //
+    // >>> HYSTERESIS THRESHOLDING <<<
+    //
+
+    // TODO
+
+    //
+    // write output image
+    //
+
+    const int32_t write_result = stbi_write_png(out_path, width, height, 1, gaussian.host_buffer, width * 1);
+    if (write_result == 0)
+        fprintf(stderr, "Error: could not write image '%s'\n", out_path);
+    else
+        printf("Grayscale written : %s\n", out_path);
+
+    //
+    // clean up
+    //
+
+    gaussian_cleanup(gaussian);
+    stbi_image_free(static_cast<void*>(const_cast<uint8_t*>(host_src)));
+
+    return write_result == 0 ? -1 : 0;
 }

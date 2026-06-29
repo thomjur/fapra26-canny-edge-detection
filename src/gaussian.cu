@@ -1,4 +1,7 @@
 #include <cstdint>
+#include <cstdio>
+#include <cuda.h>
+#include <math_constants.h>
 
 #include "gaussian.cuh"
 #include "common.cuh"
@@ -7,21 +10,133 @@
 // >>> GAUSSIAN FILTER <<<
 //
 
-#ifndef GAUSSIAN_OPT
-    #define GAUSSIAN_OPT 0
+//
+// HOST
+//
+
+GaussianResult gaussian_execute(
+    const uint8_t* host_src,
+    const int32_t  width,
+    const int32_t  height)
+{
+    constexpr float    sigma     = 1.4f;
+    constexpr uint32_t blur_size = BLUR_RADIUS * 2 + 1;
+    const     size_t   img_size  = width * height * sizeof(uint8_t);
+
+    // compute weights on host
+    float weights[blur_size * blur_size];
+    calculate_gaussian_weights(BLUR_RADIUS, sigma, weights);
+
+    // grid / block layout
+    dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid_dim(
+        static_cast<uint32_t>(std::ceil(static_cast<float>(width)  / BLOCK_SIZE)),
+        static_cast<uint32_t>(std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+
+    // host output buffer — pinned for faster D->H transfer if GAUSSIAN_PINNED
+#ifdef GAUSSIAN_PINNED
+    uint8_t* host_dst = nullptr;
+    CUDA_THROW_IF_FAILED(cudaMallocHost(&host_dst, img_size));
+#else
+    auto* host_dst = static_cast<uint8_t*>(malloc(img_size));
 #endif
 
-#if GAUSSIAN_OPT == 0
-    #define GAUSSIAN_NAIVE
-#elif GAUSSIAN_OPT == 1
-    #define GAUSSIAN_SHARED
-#elif GAUSSIAN_OPT == 2
-    #define GAUSSIAN_PINNED
-#elif GAUSSIAN_OPT == 3
-    #define GAUSSIAN_WARP
-#else
-    #error "GAUSSIAN_OPT must be 0, 1, 2, or 3"
+    // device buffers
+    uint8_t* device_src;
+    uint8_t* device_dst;
+    CUDA_THROW_IF_FAILED(cudaMalloc(&device_src, img_size));
+    CUDA_THROW_IF_FAILED(cudaMalloc(&device_dst, img_size));
+    CUDA_THROW_IF_FAILED(cudaMemset(device_dst, 0, img_size));
+
+    // upload weights
+#ifdef GAUSSIAN_NAIVE
+    float* device_weights_buf = nullptr;
+    CUDA_THROW_IF_FAILED(cudaMalloc(&device_weights_buf, blur_size * blur_size * sizeof(float)));
+    CUDA_THROW_IF_FAILED(cudaMemcpy(device_weights_buf, weights, blur_size * blur_size * sizeof(float), cudaMemcpyHostToDevice));
 #endif
+#ifdef GAUSSIAN_SHARED
+    CUDA_THROW_IF_FAILED(cudaMemcpyToSymbol(device_weights, weights, blur_size * blur_size * sizeof(float)));
+#endif
+
+    // timing events
+    cudaEvent_t t0, t1, t2, t3;
+    CUDA_THROW_IF_FAILED(cudaEventCreate(&t0));
+    CUDA_THROW_IF_FAILED(cudaEventCreate(&t1));
+    CUDA_THROW_IF_FAILED(cudaEventCreate(&t2));
+    CUDA_THROW_IF_FAILED(cudaEventCreate(&t3));
+
+    // H->D
+    cudaEventRecord(t0);
+    CUDA_THROW_IF_FAILED(cudaMemcpy(device_src, host_src, img_size, cudaMemcpyHostToDevice));
+    cudaEventRecord(t1);
+
+    // kernel
+#ifdef GAUSSIAN_NAIVE
+    gaussian_filter<<<grid_dim, block_dim>>>(device_src, width, height, device_weights_buf, BLUR_RADIUS, device_dst);
+#endif
+#ifdef GAUSSIAN_SHARED
+    gaussian_filter<<<grid_dim, block_dim>>>(device_src, width, height, device_dst);
+#endif
+    cudaEventRecord(t2);
+
+    // D->H
+    CUDA_THROW_IF_FAILED(cudaMemcpy(host_dst, device_dst, img_size, cudaMemcpyDeviceToHost));
+    cudaEventRecord(t3);
+    CUDA_THROW_IF_FAILED(cudaEventSynchronize(t3));
+
+    // collect timings
+    GaussianResult result{};
+    result.host_buffer = host_dst;
+    cudaEventElapsedTime(&result.ms_h2d,    t0, t1);
+    cudaEventElapsedTime(&result.ms_kernel, t1, t2);
+    cudaEventElapsedTime(&result.ms_d2h,    t2, t3);
+
+    // clean up device resources
+    cudaEventDestroy(t0); cudaEventDestroy(t1);
+    cudaEventDestroy(t2); cudaEventDestroy(t3);
+#ifdef GAUSSIAN_NAIVE
+    CUDA_THROW_IF_FAILED(cudaFree(device_weights_buf));
+#endif
+    CUDA_THROW_IF_FAILED(cudaFree(device_src));
+    CUDA_THROW_IF_FAILED(cudaFree(device_dst));
+
+    return result;
+}
+
+void gaussian_cleanup(GaussianResult& result)
+{
+#ifdef GAUSSIAN_PINNED
+    cudaFreeHost(result.host_buffer);
+#else
+    free(result.host_buffer);
+#endif
+    result.host_buffer = nullptr;
+}
+
+void calculate_gaussian_weights(
+    const uint32_t blur_radius,
+    const float sigma,
+    float* out_weights)
+{
+    const uint32_t blur_size = blur_radius * 2 + 1;
+    float weight_sum = 0.0f;
+
+    // calculate gaussian weights
+    for (int32_t y = -static_cast<int32_t>(blur_radius); y <= static_cast<int32_t>(blur_radius); y++)
+    {
+        for (int32_t x = -static_cast<int32_t>(blur_radius); x <= static_cast<int32_t>(blur_radius); x++)
+        {
+            const float weight = std::exp(-(x * x + y * y) / (2.0f * sigma * sigma));
+            const uint32_t idx = (y + blur_radius) * blur_size + (x + blur_radius);
+            out_weights[idx] = weight;
+            weight_sum += weight;
+        }
+    }
+
+    // normalize
+    for (uint32_t i = 0; i < blur_size * blur_size; i++)
+        out_weights[i] /= weight_sum;
+}
 
 //
 // NAIVE
@@ -127,28 +242,3 @@ __global__ void gaussian_filter(
     out_dst_buffer[y * width + x] = static_cast<uint8_t>(color);
 }
 #endif // #ifdef GAUSSIAN_SHARED
-
-void calculate_gaussian_weights(
-    const uint32_t blur_radius,
-    const float sigma,
-    float* out_weights)
-{
-    const uint32_t blur_size = blur_radius * 2 + 1;
-    float weight_sum = 0.0f;
-
-    // calculate gaussian weights
-    for (int32_t y = -static_cast<int32_t>(blur_radius); y <= static_cast<int32_t>(blur_radius); y++)
-    {
-        for (int32_t x = -static_cast<int32_t>(blur_radius); x <= static_cast<int32_t>(blur_radius); x++)
-        {
-            const float weight = std::exp(-(x * x + y * y) / (2.0f * sigma * sigma));
-            const uint32_t idx = (y + blur_radius) * blur_size + (x + blur_radius);
-            out_weights[idx] = weight;
-            weight_sum += weight;
-        }
-    }
-
-    // normalize
-    for (uint32_t i = 0; i < blur_size * blur_size; i++)
-        out_weights[i] /= weight_sum;
-}
