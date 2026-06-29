@@ -20,6 +20,8 @@
 \usepackage{graphicx}
 \usepackage{tikz}
 \usepackage{float}
+\usepackage{tabularx}
+\newcolumntype{R}{>{\raggedleft\arraybackslash}X}
 
 \geometry{margin=2.5cm}
 
@@ -61,6 +63,20 @@
     \subsection{Projektstruktur}
 
     \subsection{Build-System und Kompilierung}
+
+    \subsection{Messmethodologie}
+
+    Die Performance-Messungen wurden unter nicht-isolierten Bedingungen durchgeführt. Folgende Faktoren können die Ergebnisse beeinflusst haben:
+
+    \begin{itemize}
+        \item Hintergrundprozesse liefen parallel zur Messung
+        \item Thermisches Throttling durch unkontrollierte GPU-Temperatur
+        \item Dynamisches Power Management der Laptop-GPU
+        \item Nicht garantiert geleerte CPU- und GPU-Caches zwischen den Runs
+        \item OS-Scheduling-Interrupts, insbesondere bei H$\to$D/D$\to$H Transfers
+    \end{itemize}
+
+    Die Ergebnisse sind daher als Richtwerte zu verstehen. Um Schwankungen zu minimieren, wurde jede Messung als Durchschnitt über 200 Runs ermittelt. Der erste Aufruf (Warm-up Run) wird separat ausgewiesen, da CUDA-Kontext und Page-Cache zu diesem Zeitpunkt noch nicht aufgewärmt sind. NCU-Profiling wurde mit 10 Kernel-Instanzen pro Report durchgeführt, der Warm-up Run ausgeschlossen.
 
     \newpage
 
@@ -285,8 +301,7 @@ out_buffer[y * width + x] = color
 
     Die Kachel hat die Größe $(\texttt{BLOCK\_SIZE} + 2 \cdot
     \texttt{BLUR\_RADIUS})^2$ und enthält neben den eigentlichen Ausgabepixeln
-    des Blocks auch den sogenannten Halo-Rand, also die Nachbarpixel, die für
-    die Randpixel des Blocks benötigt werden. Da die Kachel größer ist als der
+    des Blocks auch den sogenannten Halo-Rand. Da die Kachel größer ist als der
     Block selbst, lädt jeder Thread mittels eines Stride-Loops einen oder mehrere
     Pixel in den Shared Memory. Nach dem Laden wird \texttt{\_\_syncthreads()}
     aufgerufen, um sicherzustellen, dass alle Threads ihre Pixel geschrieben haben
@@ -301,103 +316,104 @@ out_buffer[y * width + x] = color
         \item \texttt{\_\_shared\_\_ uint8\_t tile[tile\_size * tile\_size]},
         eine kooperativ geladene Bildkachel inklusive Halo-Rand der Breite
         \texttt{BLUR\_RADIUS}
-        \item \texttt{\_\_syncthreads()}, eine Synchronisationsbarriere nach dem
-        kooperativen Laden, bevor ein Thread mit dem Lesen beginnt
+        \item \texttt{\_\_syncthreads()}, Synchronisationsbarriere nach dem
+        kooperativen Laden
         \item \texttt{\_\_constant\_\_ float device\_weights[...]},
-        Gaußgewichte in Constant Memory statt Global Memory, Upload per
-        \texttt{cudaMemcpyToSymbol()} vor dem Kernelaufruf
+        Gaußgewichte in Constant Memory, Upload per \texttt{cudaMemcpyToSymbol()}
     \end{itemize}
 
-    Die NCU-Messungen in Abbildung~\ref{fig:gaussian_ncu} zeigen, dass der
-    Speedup stark vom \texttt{BLUR\_RADIUS} abhängt. Bei $r=2$ überwiegt der
-    \texttt{\_\_syncthreads()}-Overhead, da der eigentliche Blur-Loop mit
-    $(2 \cdot 2 + 1)^2 = 25$ Operationen zu günstig ist, um den
-    Synchronisationsaufwand zu amortisieren. Die Laufzeit steigt von 2.57\,ms
-    auf 12.54\,ms. Bei $r=9$ hingegen kehrt sich das Verhältnis um, die
+    Abbildung~\ref{fig:gaussian_ncu} zeigt, dass der Speedup stark vom
+    \texttt{BLUR\_RADIUS} abhängt. Bei $r=2$ überwiegt der \texttt{\_\_syncthreads()}-Overhead, die Kernel-Laufzeit
+    sinkt nur marginal von 1.67\,ms auf 0.99\,ms bei nahezu identischem SM Throughput
+    (68.31\,\% vs.\ 66.25\,\%). Bei $r=9$ kehrt sich das Verhältnis um: die
     $(2 \cdot 9 + 1)^2 = 361$ Operationen pro Pixel machen den redundanten
-    DRAM-Traffic zum dominanten Faktor. Die uncoalesced Global Memory Zugriffe
-    reduzieren sich von 322.9M auf 5.3M, und die Laufzeit sinkt von 34.12\,ms
-    auf 12.54\,ms, ein Speedup von 2.7$\times$.
+    DRAM-Traffic zum dominanten Faktor, die Kernel-Laufzeit sinkt von 22.67\,ms
+    auf 7.54\,ms ($3.0\times$ Speedup), der SM Throughput steigt von 64.66\,\%
+    auf 91.50\,\%. Die vollständigen Messdaten sind in Anhang~A (S.~\pageref{app:gaussian_rohdaten}) aufgeführt.
 
     \begin{figure}[H]
         \centering
-        \begin{minipage}{0.32\textwidth}
+        \begin{minipage}{0.48\textwidth}
             \begin{tikzpicture}
                 \begin{axis}[
-                    ybar, bar width=10pt,
+                    ybar,
+                    bar width=10pt,
                     title={SM Throughput (\%)},
                 title style={font=\footnotesize},
-                xtick={1,2,3,4},
-                xticklabels={n $r2$, s $r2$, n $r9$, s $r9$},
-                xticklabel style={font=\tiny, rotate=30, anchor=east},
+                xtick={1,2},
+                xticklabels={$r{=}2$, $r{=}9$},
+                xticklabel style={font=\small},
                 width=\textwidth, height=6cm,
-                ymin=0, ymax=110,
-                nodes near coords, nodes near coords style={font=\tiny},
-                enlarge x limits=0.2,
+                ymin=0, ymax=115,
+                enlarge x limits=0.4,
+                legend style={at={(0.5,-0.25)}, anchor=north, legend columns=3, font=\tiny},
+                nodes near coords,
+                nodes near coords style={font=\tiny, rotate=90, anchor=west},
                 ]
-                    \addplot[fill=green!25, bar shift=0pt] coordinates {(1,70.27)};
-                    \addplot[fill=green!60, bar shift=0pt] coordinates {(2,91.47)};
-                    \addplot[fill=blue!25,  bar shift=0pt] coordinates {(3,64.66)};
-                    \addplot[fill=blue!60,  bar shift=0pt] coordinates {(4,91.48)};
+                    \addplot[fill={rgb,255:red,70;green,130;blue,200}]  coordinates {(1,68.31) (2,64.66)};
+                    \addplot[fill={rgb,255:red,240;green,160;blue,50}]  coordinates {(1,66.25) (2,91.50)};
+                    \addplot[fill={rgb,255:red,100;green,190;blue,120}] coordinates {(1,66.54) (2,91.46)};
+                    \legend{naive, shared, pinned}
                 \end{axis}
             \end{tikzpicture}
         \end{minipage}
         \hfill
-        \begin{minipage}{0.32\textwidth}
+        \begin{minipage}{0.48\textwidth}
             \begin{tikzpicture}
                 \begin{axis}[
-                    ybar, bar width=10pt,
-                    title={Uncoalesced Accesses (M)},
-                title style={font=\footnotesize},
-                xtick={1,2,3,4},
-                xticklabels={n $r2$, s $r2$, n $r9$, s $r9$},
-                xticklabel style={font=\tiny, rotate=30, anchor=east},
-                width=\textwidth, height=6cm,
-                ymin=0,
-                nodes near coords, nodes near coords style={font=\tiny},
-                enlarge x limits=0.2,
-                ]
-                    \addplot[fill=green!25, bar shift=0pt] coordinates {(1,21.1)};
-                    \addplot[fill=green!60, bar shift=0pt] coordinates {(2,5.3)};
-                    \addplot[fill=blue!25,  bar shift=0pt] coordinates {(3,322.9)};
-                    \addplot[fill=blue!60,  bar shift=0pt] coordinates {(4,5.3)};
-                \end{axis}
-            \end{tikzpicture}
-        \end{minipage}
-        \hfill
-        \begin{minipage}{0.32\textwidth}
-            \begin{tikzpicture}
-                \begin{axis}[
-                    ybar, bar width=10pt,
+                    ybar,
+                    bar width=10pt,
                     title={Kernel Duration (ms)},
                 title style={font=\footnotesize},
-                xtick={1,2,3,4},
-                xticklabels={n $r2$, s $r2$, n $r9$, s $r9$},
-                xticklabel style={font=\tiny, rotate=30, anchor=east},
+                xtick={1,2},
+                xticklabels={$r{=}2$, $r{=}9$},
+                xticklabel style={font=\small},
                 width=\textwidth, height=6cm,
-                ymin=0,
-                nodes near coords, nodes near coords style={font=\tiny},
-                enlarge x limits=0.2,
+                ymin=0, ymax=27,
+                enlarge x limits=0.4,
+                legend style={at={(0.5,-0.25)}, anchor=north, legend columns=3, font=\tiny},
+                nodes near coords,
+                nodes near coords style={font=\tiny, rotate=90, anchor=west},
                 ]
-                    \addplot[fill=green!25, bar shift=0pt] coordinates {(1,2.57)};
-                    \addplot[fill=green!60, bar shift=0pt] coordinates {(2,12.54)};
-                    \addplot[fill=blue!25,  bar shift=0pt] coordinates {(3,34.12)};
-                    \addplot[fill=blue!60,  bar shift=0pt] coordinates {(4,12.54)};
+                    \addplot[fill={rgb,255:red,70;green,130;blue,200}]  coordinates {(1,1.67) (2,22.67)};
+                    \addplot[fill={rgb,255:red,240;green,160;blue,50}]  coordinates {(1,0.99) (2, 7.54)};
+                    \addplot[fill={rgb,255:red,100;green,190;blue,120}] coordinates {(1,0.99) (2, 7.33)};
+                    \legend{naive, shared, pinned}
                 \end{axis}
             \end{tikzpicture}
         \end{minipage}
-
-        \vspace{0.5em}
-        \noindent\footnotesize
-        \textcolor{green!40}{$\blacksquare$}~naive $r{=}2$\quad
-        \textcolor{green!70}{$\blacksquare$}~shared $r{=}2$\quad
-        \textcolor{blue!35}{$\blacksquare$}~naive $r{=}9$\quad
-        \textcolor{blue!70}{$\blacksquare$}~shared $r{=}9$
-
-        \caption{NCU-Profiling, Vergleich naive vs.\ Shared Memory bei $r{=}2$ und
-            $r{=}9$ auf einer RTX~2060. n~=~naive, s~=~shared.}
+        \caption{NCU-Profiling, Vergleich naive/shared/pinned bei $r{=}2$ und $r{=}9$ (200 Runs Avg).}
         \label{fig:gaussian_ncu}
     \end{figure}
+
+    \subsubsection{Pinned Memory Optimierung}
+    \label{sec:pinned_memory_gaussian}
+
+    Pinned Memory (Page-locked Memory) ist Host-seitiger Speicher, der vom
+    Betriebssystem nicht ausgelagert werden kann, wodurch direkte DMA-Transfers
+    ohne zwischengeschalteten CPU-Cache möglich sind. Die Änderung gegenüber
+    der Shared Memory Implementierung beschränkt sich ausschließlich auf die
+    Host-seitige Allokation (\texttt{cudaMallocHost()} statt \texttt{malloc()}),
+    der Kernel bleibt identisch, was die NCU-Messungen bestätigen: Compute
+    Throughput und Occupancy sind bei $r=9$ mit 91.46\,\% bzw.\ 94.83\,\%
+    praktisch identisch zur Shared Memory Variante (91.50\,\% bzw.\ 94.84\,\%).
+    Der Vorteil zeigt sich ausschließlich im D$\to$H Transfer, der bei $r=9$
+    von 2.04\,ms auf 1.37\,ms sinkt, und im Gesamttiming von 11.95\,ms auf
+    10.75\,ms. Die vollständigen Messdaten sind im Anhang~A (S.~\pageref{app:gaussian_rohdaten}) aufgeführt.
+
+    \subsubsection{Warp-Level Optimierung - Evaluation}
+
+    Als vierte Optimierungsstufe wurden Warp-Level Intrinsics (\texttt{\_\_shfl\_sync()})
+    evaluiert. Diese ermöglichen den direkten Datenaustausch zwischen Threads
+    innerhalb eines Warps ohne Shared Memory und ohne \texttt{\_\_syncthreads()}.
+
+    Für 2D-Stencil-Operationen wie den Gaussian Blur ist dieser Ansatz jedoch
+    nicht geeignet, da \texttt{\_\_shfl\_sync()} primär für 1D-Reduktionen
+    konzipiert ist und bei zweidimensionalen Nachbarschaftszugriffen keinen
+    strukturellen Vorteil bietet. Yadav et al.\ bestätigen dies: in ihren
+    Messungen erreicht die Warp-Variante 79.29\,\% Compute/Memory Throughput,
+    während Shared Memory 83.33\,\% erzielt \cite{yadav2025}. Eine eigene
+    Implementierung wurde daher nicht vorgenommen.
 
 
     \subsection{Schritt 2: Gradient Berechnung (Sobel)}
@@ -559,5 +575,93 @@ __global__ void non_maximum_suppression(
 
     \bibliographystyle{plain}
     \bibliography{references}
+
+    \newpage
+
+% ════════════════════════════════════════════════════════════════════════════
+    \section*{Anhang}
+    \addcontentsline{toc}{section}{Anhang}
+% ════════════════════════════════════════════════════════════════════════════
+
+    \phantomsection
+    \subsection*{A: Performance-Rohdaten Gaussian Blur}
+    \label{app:gaussian_rohdaten}
+
+    \begin{table}[H]
+        \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik & naive & shared & pinned \\
+\midrule
+\multicolumn{4}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  3.062 &  5.660 &  2.709 \\
+Kernel [ms]   &  2.606 &  1.697 &  1.688 \\
+D$\to$H [ms]  &  7.631 &  7.020 &  2.502 \\
+Total [ms]    & 13.299 & 14.377 &  6.899 \\
+\midrule
+\multicolumn{4}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  3.548 &  3.475 &  3.135 \\
+Kernel [ms]   &  1.669 &  0.990 &  0.987 \\
+D$\to$H [ms]  &  3.068 &  3.001 &  1.740 \\
+Total [ms]    &  8.286 &  7.466 &  5.862 \\
+\bottomrule
+        \end{tabularx}
+        \caption{cudaEvent-Messungen, BLUR\_RADIUS = 2}
+    \end{table}
+
+    \begin{table}[H]
+        \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik (NCU, 10 Runs Avg) & naive & shared & pinned \\
+\midrule
+Compute (SM) Throughput [\%]       & 68.31 & 66.25 & 66.54 \\
+Memory Throughput [\%]             & 61.10 & 66.25 & 66.54 \\
+DRAM Throughput [\%]               &  5.81 &  8.42 &  7.60 \\
+Achieved Occupancy [\%]            & 76.50 & 92.67 & 92.65 \\
+Warp Cycles Per Issued Instruction &  8.79 & 16.46 & 16.33 \\
+L1/TEX Hit Rate [\%]               & 92.94 & 27.32 & 27.29 \\
+L2 Hit Rate [\%]                   & 87.75 & 88.17 & 89.12 \\
+\bottomrule
+        \end{tabularx}
+        \caption{NCU-Profiling, BLUR\_RADIUS = 2}
+    \end{table}
+
+    \begin{table}[H]
+        \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik & naive & shared & pinned \\
+\midrule
+\multicolumn{4}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  2.589 &  1.757 &  1.781 \\
+Kernel [ms]   & 35.700 & 12.575 & 13.182 \\
+D$\to$H [ms]  &  6.035 &  6.183 &  1.836 \\
+Total [ms]    & 44.324 & 20.515 & 16.799 \\
+\midrule
+\multicolumn{4}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  2.512 &  2.375 &  2.057 \\
+Kernel [ms]   & 22.669 &  7.537 &  7.325 \\
+D$\to$H [ms]  &  2.142 &  2.036 &  1.366 \\
+Total [ms]    & 27.308 & 11.948 & 10.747 \\
+\bottomrule
+        \end{tabularx}
+        \caption{cudaEvent-Messungen, BLUR\_RADIUS = 9}
+    \end{table}
+
+    \begin{table}[H]
+        \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik (NCU, 10 Runs Avg) & naive & shared & pinned \\
+\midrule
+Compute (SM) Throughput [\%]       & 64.66 & 91.50 & 91.46 \\
+Memory Throughput [\%]             & 64.66 & 91.50 & 91.46 \\
+DRAM Throughput [\%]               &  1.06 &  1.69 &  1.79 \\
+Achieved Occupancy [\%]            & 95.52 & 94.84 & 94.83 \\
+Warp Cycles Per Issued Instruction & 12.56 & 13.78 & 13.77 \\
+L1/TEX Hit Rate [\%]               & 99.27 & 45.55 & 45.54 \\
+L2 Hit Rate [\%]                   & 63.36 & 82.96 & 87.35 \\
+\bottomrule
+        \end{tabularx}
+        \caption{NCU-Profiling, BLUR\_RADIUS = 9}
+    \end{table}
+
 
 \end{document}
