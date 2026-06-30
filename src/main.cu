@@ -9,6 +9,7 @@
 #include "stb_image_write.h"
 
 #include "gaussian.cuh"
+#include "sobel.cuh"
 
 //
 // Canny Edge Detection Pipeline
@@ -86,6 +87,47 @@ int main(int argc, const char **argv) {
   //
   // >>> SOBEL FILTER <<<
   //
+  // Currently only naive implementation of single run Sobel filter
+  // First we manually load preprocessed Gaussian image for testing
+  const uint8_t *host_src_processed =
+      stbi_load("assets/gaussian.jpg", &width, &height, &channels_in_file, 1);
+  if (host_src_processed == nullptr)
+    return -1;
+
+  printf("Image loaded : %s\n", "gaussian_img.jpg");
+  printf("Size         : %d x %d\n", width, height);
+  printf("Channels     : %d (loaded as grayscale)\n", channels_in_file);
+
+  dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 grid_dim(
+      static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+      static_cast<uint32_t>(
+          std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+  const size_t img_size = width * height * sizeof(uint8_t);
+  // device buffers
+  uint8_t *device_src;
+  uint8_t *device_dst;
+  auto *host_dst_sobel = static_cast<uint8_t *>(malloc(img_size));
+  CUDA_THROW_IF_FAILED(cudaMalloc(&device_src, img_size));
+  CUDA_THROW_IF_FAILED(cudaMalloc(&device_dst, img_size));
+  CUDA_THROW_IF_FAILED(cudaMemset(device_dst, 0, img_size));
+  // Copy image H -> D
+  CUDA_THROW_IF_FAILED(cudaMemcpy(device_src, host_src_processed, img_size,
+                                  cudaMemcpyHostToDevice));
+  // Running Kernel
+  naiveSobelFilter<<<grid_dim, block_dim>>>(device_src, width, height,
+                                            device_dst);
+
+  // Copy image D -> H
+  CUDA_THROW_IF_FAILED(
+      cudaMemcpy(host_dst_sobel, device_dst, img_size, cudaMemcpyDeviceToHost));
+  // Save image on host
+  int32_t write_result = stbi_write_png("assets/sobel.jpg", width, height, 1,
+                                        host_dst_sobel, width * 1);
+  if (write_result == 0)
+    fprintf(stderr, "Error: could not write image '%s'\n", out_path);
+  else
+    printf("Grayscale Sobel image written : %s\n", out_path);
 
   // TODO
 
@@ -105,8 +147,8 @@ int main(int argc, const char **argv) {
   // write output image
   //
 
-  const int32_t write_result = stbi_write_png(out_path, width, height, 1,
-                                              gaussian.host_buffer, width * 1);
+  write_result = stbi_write_png(out_path, width, height, 1,
+                                gaussian.host_buffer, width * 1);
   if (write_result == 0)
     fprintf(stderr, "Error: could not write image '%s'\n", out_path);
   else
