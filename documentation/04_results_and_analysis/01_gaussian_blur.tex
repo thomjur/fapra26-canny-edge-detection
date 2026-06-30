@@ -1,12 +1,29 @@
 \subsection{Gaussian Blur}
 \label{sec:results_gaussian}
 
+\subsubsection{Korrektheit}
+
+Abbildung~\ref{fig:gaussian_result} zeigt das Ergebnis der Filterung im
+Vergleich zum Originalbild.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{98_assets/maple-leaf-black-5120x2880-cmp-original-gaussian.jpg}
+    \caption{Vergleich Original (links) vs.\ Gaussian Blur (rechts,
+        $\sigma = 25$, \texttt{BLUR\_RADIUS}$= 12$). Die Parameter wurden
+        bewusst extrem gewählt, um den Effekt deutlicher sichtbar zu machen,
+        in der Pipeline wird ein deutlich sanfterer Filter verwendet.}
+    \label{fig:gaussian_result}
+\end{figure}
+
+\subsubsection{Performance}
+
 Das NCU-Profiling der naiven Implementierung zeigt, dass 47\,\% aller
 Global Memory Zugriffe uncoalesced sind, was die in
 Abschnitt~\ref{sec:shared_memory_gaussian} beschriebene Shared Memory
 Optimierung motiviert.
 
-Der gemessene Speedup hängt stark vom \texttt{BLUR\_RADIUS} ab. Bei $r=2$
+Der gemessene Speedup hängt stark vom \texttt{BLUR\_RADIUS} ab (siehe Abbildung~\ref{fig:gaussian_ncu}). Bei $r=2$
 überwiegt der \texttt{\_\_syncthreads()}-Overhead, die Kernel-Laufzeit
 sinkt nur marginal von 1.67\,ms auf 0.99\,ms bei nahezu identischem SM
 Throughput (68.31\,\% vs.\ 66.25\,\%). Bei $r=9$ kehrt sich das Verhältnis
@@ -15,6 +32,15 @@ redundanten DRAM-Traffic zum dominanten Faktor, die Kernel-Laufzeit sinkt
 von 22.67\,ms auf 7.54\,ms ($3.0\times$ Speedup), der SM Throughput steigt
 von 64.66\,\% auf 91.50\,\%. Die vollständigen Messdaten sind in
 Anhang~A (S.~\pageref{app:gaussian_rohdaten}) aufgeführt.
+
+Die Pinned-Memory-Variante bestätigt, dass Compute Throughput und
+Occupancy bei $r=9$ mit 91.46\,\% bzw.\ 94.83\,\% praktisch identisch zur
+Shared Memory Variante sind (91.50\,\% bzw.\ 94.84\,\%), was sich dadurch
+erklärt, dass der Kernel selbst unverändert bleibt. Der Vorteil zeigt sich
+ausschließlich im D$\to$H Transfer, der bei $r=9$ von 2.04\,ms auf
+1.37\,ms sinkt, und im Gesamttiming von 11.95\,ms auf 10.75\,ms. Die
+vollständigen Messdaten sind im Anhang~A (S.~\pageref{app:gaussian_rohdaten})
+aufgeführt.
 
 \begin{figure}[H]
     \centering
@@ -71,11 +97,3 @@ Anhang~A (S.~\pageref{app:gaussian_rohdaten}) aufgeführt.
     \label{fig:gaussian_ncu}
 \end{figure}
 
-Die Pinned-Memory-Variante bestätigt, dass Compute Throughput und
-Occupancy bei $r=9$ mit 91.46\,\% bzw.\ 94.83\,\% praktisch identisch zur
-Shared Memory Variante sind (91.50\,\% bzw.\ 94.84\,\%), was sich dadurch
-erklärt, dass der Kernel selbst unverändert bleibt. Der Vorteil zeigt sich
-ausschließlich im D$\to$H Transfer, der bei $r=9$ von 2.04\,ms auf
-1.37\,ms sinkt, und im Gesamttiming von 11.95\,ms auf 10.75\,ms. Die
-vollständigen Messdaten sind im Anhang~A (S.~\pageref{app:gaussian_rohdaten})
-aufgeführt.
