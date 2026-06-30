@@ -33,6 +33,13 @@ nvcc -rdc=true -O2 -std=c++20 -arch=$ARCH \
 
 if [ $? -ne 0 ]; then echo "Failed: gaussian.cu"; exit 1; fi
 
+nvcc -rdc=true -O2 -std=c++20 -arch=$ARCH \
+  -g -G -lineinfo \
+  -DGAUSSIAN_OPT=$GAUSSIAN_OPT \
+  -c -o "$BIN_DIR/sobel.o" src/sobel.cu
+
+if [ $? -ne 0 ]; then echo "Failed: sobel.cu"; exit 1; fi
+
 # device link step (required for rdc=true)
 nvcc -dlink -arch=$ARCH \
   -o "$BIN_DIR/device_link.o" \
@@ -44,7 +51,8 @@ if [ $? -ne 0 ]; then echo "Failed: device link"; exit 1; fi
 nvcc -o "$BINARY" \
   "$BIN_DIR/main.o" \
   "$BIN_DIR/gaussian.o" \
-  "$BIN_DIR/device_link.o"
+  "$BIN_DIR/device_link.o" \
+  "$BIN_DIR/sobel.o"
 
 if [ $? -eq 0 ]; then
   echo "Done. Run with: ./$BINARY <input.jpg> <output.png>"
