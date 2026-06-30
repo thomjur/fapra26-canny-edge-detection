@@ -1,0 +1,79 @@
+\phantomsection
+\subsection*{A: Performance-Rohdaten Gaussian Blur}
+\label{app:gaussian_rohdaten}
+
+\begin{table}[H]
+    \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik & naive & shared & pinned \\
+\midrule
+\multicolumn{4}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  3.062 &  5.660 &  2.709 \\
+Kernel [ms]   &  2.606 &  1.697 &  1.688 \\
+D$\to$H [ms]  &  7.631 &  7.020 &  2.502 \\
+Total [ms]    & 13.299 & 14.377 &  6.899 \\
+\midrule
+\multicolumn{4}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  3.548 &  3.475 &  3.135 \\
+Kernel [ms]   &  1.669 &  0.990 &  0.987 \\
+D$\to$H [ms]  &  3.068 &  3.001 &  1.740 \\
+Total [ms]    &  8.286 &  7.466 &  5.862 \\
+\bottomrule
+    \end{tabularx}
+    \caption{cudaEvent-Messungen, BLUR\_RADIUS = 2}
+\end{table}
+
+\begin{table}[H]
+    \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik (NCU, 10 Runs Avg) & naive & shared & pinned \\
+\midrule
+Compute (SM) Throughput [\%]       & 68.31 & 66.25 & 66.54 \\
+Memory Throughput [\%]             & 61.10 & 66.25 & 66.54 \\
+DRAM Throughput [\%]               &  5.81 &  8.42 &  7.60 \\
+Achieved Occupancy [\%]            & 76.50 & 92.67 & 92.65 \\
+Warp Cycles Per Issued Instruction &  8.79 & 16.46 & 16.33 \\
+L1/TEX Hit Rate [\%]               & 92.94 & 27.32 & 27.29 \\
+L2 Hit Rate [\%]                   & 87.75 & 88.17 & 89.12 \\
+\bottomrule
+    \end{tabularx}
+    \caption{NCU-Profiling, BLUR\_RADIUS = 2}
+\end{table}
+
+\begin{table}[H]
+    \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik & naive & shared & pinned \\
+\midrule
+\multicolumn{4}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  2.589 &  1.757 &  1.781 \\
+Kernel [ms]   & 35.700 & 12.575 & 13.182 \\
+D$\to$H [ms]  &  6.035 &  6.183 &  1.836 \\
+Total [ms]    & 44.324 & 20.515 & 16.799 \\
+\midrule
+\multicolumn{4}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  2.512 &  2.375 &  2.057 \\
+Kernel [ms]   & 22.669 &  7.537 &  7.325 \\
+D$\to$H [ms]  &  2.142 &  2.036 &  1.366 \\
+Total [ms]    & 27.308 & 11.948 & 10.747 \\
+\bottomrule
+    \end{tabularx}
+    \caption{cudaEvent-Messungen, BLUR\_RADIUS = 9}
+\end{table}
+
+\begin{table}[H]
+    \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik (NCU, 10 Runs Avg) & naive & shared & pinned \\
+\midrule
+Compute (SM) Throughput [\%]       & 64.66 & 91.50 & 91.46 \\
+Memory Throughput [\%]             & 64.66 & 91.50 & 91.46 \\
+DRAM Throughput [\%]               &  1.06 &  1.69 &  1.79 \\
+Achieved Occupancy [\%]            & 95.52 & 94.84 & 94.83 \\
+Warp Cycles Per Issued Instruction & 12.56 & 13.78 & 13.77 \\
+L1/TEX Hit Rate [\%]               & 99.27 & 45.55 & 45.54 \\
+L2 Hit Rate [\%]                   & 63.36 & 82.96 & 87.35 \\
+\bottomrule
+    \end{tabularx}
+    \caption{NCU-Profiling, BLUR\_RADIUS = 9}
+\end{table}

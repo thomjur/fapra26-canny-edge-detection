@@ -1,0 +1,81 @@
+\subsection{Gaussian Blur}
+\label{sec:results_gaussian}
+
+Das NCU-Profiling der naiven Implementierung zeigt, dass 47\,\% aller
+Global Memory Zugriffe uncoalesced sind, was die in
+Abschnitt~\ref{sec:shared_memory_gaussian} beschriebene Shared Memory
+Optimierung motiviert.
+
+Der gemessene Speedup hängt stark vom \texttt{BLUR\_RADIUS} ab. Bei $r=2$
+überwiegt der \texttt{\_\_syncthreads()}-Overhead, die Kernel-Laufzeit
+sinkt nur marginal von 1.67\,ms auf 0.99\,ms bei nahezu identischem SM
+Throughput (68.31\,\% vs.\ 66.25\,\%). Bei $r=9$ kehrt sich das Verhältnis
+um: die $(2 \cdot 9 + 1)^2 = 361$ Operationen pro Pixel machen den
+redundanten DRAM-Traffic zum dominanten Faktor, die Kernel-Laufzeit sinkt
+von 22.67\,ms auf 7.54\,ms ($3.0\times$ Speedup), der SM Throughput steigt
+von 64.66\,\% auf 91.50\,\%. Die vollständigen Messdaten sind in
+Anhang~A (S.~\pageref{app:gaussian_rohdaten}) aufgeführt.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \begin{tikzpicture}
+            \begin{axis}[
+                ybar,
+                bar width=10pt,
+                title={SM Throughput (\%)},
+            title style={font=\footnotesize},
+            xtick={1,2},
+            xticklabels={$r{=}2$, $r{=}9$},
+            xticklabel style={font=\small},
+            width=\textwidth, height=6cm,
+            ymin=0, ymax=115,
+            enlarge x limits=0.4,
+            legend style={at={(0.5,-0.25)}, anchor=north, legend columns=3, font=\tiny},
+            nodes near coords,
+            nodes near coords style={font=\tiny, rotate=90, anchor=west},
+            ]
+                \addplot[fill={rgb,255:red,70;green,130;blue,200}]  coordinates {(1,68.31) (2,64.66)};
+                \addplot[fill={rgb,255:red,240;green,160;blue,50}]  coordinates {(1,66.25) (2,91.50)};
+                \addplot[fill={rgb,255:red,100;green,190;blue,120}] coordinates {(1,66.54) (2,91.46)};
+                \legend{naive, shared, pinned}
+            \end{axis}
+        \end{tikzpicture}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \begin{tikzpicture}
+            \begin{axis}[
+                ybar,
+                bar width=10pt,
+                title={Kernel Duration (ms)},
+            title style={font=\footnotesize},
+            xtick={1,2},
+            xticklabels={$r{=}2$, $r{=}9$},
+            xticklabel style={font=\small},
+            width=\textwidth, height=6cm,
+            ymin=0, ymax=27,
+            enlarge x limits=0.4,
+            legend style={at={(0.5,-0.25)}, anchor=north, legend columns=3, font=\tiny},
+            nodes near coords,
+            nodes near coords style={font=\tiny, rotate=90, anchor=west},
+            ]
+                \addplot[fill={rgb,255:red,70;green,130;blue,200}]  coordinates {(1,1.67) (2,22.67)};
+                \addplot[fill={rgb,255:red,240;green,160;blue,50}]  coordinates {(1,0.99) (2, 7.54)};
+                \addplot[fill={rgb,255:red,100;green,190;blue,120}] coordinates {(1,0.99) (2, 7.33)};
+                \legend{naive, shared, pinned}
+            \end{axis}
+        \end{tikzpicture}
+    \end{minipage}
+    \caption{NCU-Profiling, Vergleich naive/shared/pinned bei $r{=}2$ und $r{=}9$ (200 Runs Avg).}
+    \label{fig:gaussian_ncu}
+\end{figure}
+
+Die Pinned-Memory-Variante bestätigt, dass Compute Throughput und
+Occupancy bei $r=9$ mit 91.46\,\% bzw.\ 94.83\,\% praktisch identisch zur
+Shared Memory Variante sind (91.50\,\% bzw.\ 94.84\,\%), was sich dadurch
+erklärt, dass der Kernel selbst unverändert bleibt. Der Vorteil zeigt sich
+ausschließlich im D$\to$H Transfer, der bei $r=9$ von 2.04\,ms auf
+1.37\,ms sinkt, und im Gesamttiming von 11.95\,ms auf 10.75\,ms. Die
+vollständigen Messdaten sind im Anhang~A (S.~\pageref{app:gaussian_rohdaten})
+aufgeführt.

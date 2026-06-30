@@ -1,0 +1,21 @@
+\subsubsection{Schritt 1: Gaussian Blur}
+
+Um einen mathematisch optimalen Kantendetektor herzuleiten, trifft Canny
+eine Annahme über das Rauschen im Bild: \textit{,,We will assume that the
+image consists of the edge and additive white Gaussian noise``}
+\cite[S.~680]{canny1986}. Da dieses Rauschen fälschlicherweise als Kante
+detektiert werden kann, muss das Bild zunächst geglättet werden. Canny
+zeigt, dass der optimale Filter für dieses Rauschmodell durch die erste
+Ableitung einer Gaußfunktion approximiert werden kann
+\cite[S.~687]{canny1986}:
+
+\begin{equation}
+    \label{eq:gaussian}
+    G(x) = \exp\left(-\frac{x^2}{2\sigma^2}\right)
+\end{equation}
+
+Der Parameter $\sigma$ kontrolliert die Stärke der Glättung. Zwischen
+Rauschunterdrückung und Lokalisierungsgenauigkeit besteht jedoch ein
+grundlegender Zielkonflikt, den Canny als
+\textit{,,uncertainty principle``} zwischen Detektion und Lokalisierung
+bezeichnet \cite[S.~684]{canny1986}.
