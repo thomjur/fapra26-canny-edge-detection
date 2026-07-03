@@ -2,9 +2,10 @@
 #include <cstdint>
 
 // Kernel for Sobel edge detection
-__global__ void naiveSobelFilter(const uint8_t *src_buffer, const int32_t width,
-                                 const int32_t height,
-                                 uint8_t *out_dst_buffer) {
+__global__ void naive_sobel_filter(const uint8_t *src_buffer,
+                                   const int32_t width, const int32_t height,
+                                   uint8_t *out_grad_buffer,
+                                   float *out_dir_buffer) {
   int32_t x = blockIdx.x * blockDim.x + threadIdx.x;
   int32_t y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -27,12 +28,16 @@ __global__ void naiveSobelFilter(const uint8_t *src_buffer, const int32_t width,
     }
 
     // Calculate the gradient magnitude
-    uint32_t gradient = static_cast<uint32_t>(sqrtf(gx * gx + gy * gy));
+    float gradient = sqrtf(gx * gx + gy * gy);
 
     // Clamp the value to 0-255
-    gradient = min(255, max(0, gradient));
+    gradient = min(255.0f, max(0.0f, gradient));
 
-    // Write the result
-    out_dst_buffer[y * width + x] = static_cast<uint8_t>(gradient);
+    // Write the gradient result
+    out_grad_buffer[y * width + x] = static_cast<uint8_t>(gradient);
+
+    // Calculate the
+    out_dir_buffer[y * width + x] =
+        atan2f(static_cast<float>(gy), static_cast<float>(gx));
   }
 }

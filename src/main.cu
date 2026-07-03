@@ -106,24 +106,31 @@ int main(int argc, const char **argv) {
   const size_t img_size = width * height * sizeof(uint8_t);
   // device buffers
   uint8_t *device_src;
-  uint8_t *device_dst;
-  auto *host_dst_sobel = static_cast<uint8_t *>(malloc(img_size));
+  uint8_t *device_gradient;
+  float *device_direction;
+  auto *host_gradient = static_cast<uint8_t *>(malloc(img_size));
+  auto *host_direction =
+      static_cast<float *>(malloc(width * height * sizeof(float)));
   CUDA_THROW_IF_FAILED(cudaMalloc(&device_src, img_size));
-  CUDA_THROW_IF_FAILED(cudaMalloc(&device_dst, img_size));
-  CUDA_THROW_IF_FAILED(cudaMemset(device_dst, 0, img_size));
+  CUDA_THROW_IF_FAILED(cudaMalloc(&device_gradient, img_size));
+  CUDA_THROW_IF_FAILED(
+      cudaMalloc(&device_direction, width * height * sizeof(float)));
+  CUDA_THROW_IF_FAILED(cudaMemset(device_gradient, 0, img_size));
   // Copy image H -> D
   CUDA_THROW_IF_FAILED(cudaMemcpy(device_src, host_src_processed, img_size,
                                   cudaMemcpyHostToDevice));
   // Running Kernel
-  naiveSobelFilter<<<grid_dim, block_dim>>>(device_src, width, height,
-                                            device_dst);
+  naive_sobel_filter<<<grid_dim, block_dim>>>(
+      device_src, width, height, device_gradient, device_direction);
 
   // Copy image D -> H
-  CUDA_THROW_IF_FAILED(
-      cudaMemcpy(host_dst_sobel, device_dst, img_size, cudaMemcpyDeviceToHost));
+  CUDA_THROW_IF_FAILED(cudaMemcpy(host_gradient, device_gradient, img_size,
+                                  cudaMemcpyDeviceToHost));
+  CUDA_THROW_IF_FAILED(cudaMemcpy(host_direction, device_direction, img_size,
+                                  cudaMemcpyDeviceToHost));
   // Save image on host
   int32_t write_result = stbi_write_png("assets/sobel.jpg", width, height, 1,
-                                        host_dst_sobel, width * 1);
+                                        host_gradient, width * 1);
   if (write_result == 0)
     fprintf(stderr, "Error: could not write image '%s'\n", out_path);
   else
