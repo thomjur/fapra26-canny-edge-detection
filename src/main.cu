@@ -28,7 +28,7 @@
 //
 
 // 200 runs for stable avg — reduce to ~10 when profiling with NCU
-#define GAUSSIAN_BENCHMARK_RUNS 1
+#define BENCHMARK_RUNS 10
 int main(int argc, const char **argv) {
   if (argc < 3) {
     fprintf(stderr, "Usage: ./canny.out <input.jpg> <output.png>\n");
@@ -68,7 +68,7 @@ int main(int argc, const char **argv) {
   // Gaussian Runs
   float total_h2d = 0, total_kernel = 0, total_d2h = 0;
   GaussianResult gaussian{};
-  for (int i = 0; i < GAUSSIAN_BENCHMARK_RUNS; i++) {
+  for (int i = 0; i < BENCHMARK_RUNS; i++) {
     if (i > 0)
       gaussian_cleanup(gaussian);
     gaussian = gaussian_execute(host_src, width, height);
@@ -77,12 +77,12 @@ int main(int argc, const char **argv) {
     total_d2h += gaussian.ms_d2h;
   }
 
-  printf("--- Gaussian Filter (%d runs avg) ---\n", GAUSSIAN_BENCHMARK_RUNS);
-  printf("H->D:   %.3f ms\n", total_h2d / GAUSSIAN_BENCHMARK_RUNS);
-  printf("Kernel: %.3f ms\n", total_kernel / GAUSSIAN_BENCHMARK_RUNS);
-  printf("D->H:   %.3f ms\n", total_d2h / GAUSSIAN_BENCHMARK_RUNS);
+  printf("--- Gaussian Filter (%d runs avg) ---\n", BENCHMARK_RUNS);
+  printf("H->D:   %.3f ms\n", total_h2d / BENCHMARK_RUNS);
+  printf("Kernel: %.3f ms\n", total_kernel / BENCHMARK_RUNS);
+  printf("D->H:   %.3f ms\n", total_d2h / BENCHMARK_RUNS);
   printf("Total:  %.3f ms\n",
-         (total_h2d + total_kernel + total_d2h) / GAUSSIAN_BENCHMARK_RUNS);
+         (total_h2d + total_kernel + total_d2h) / BENCHMARK_RUNS);
 
   //
   // >>> SOBEL FILTER <<<
@@ -112,7 +112,7 @@ int main(int argc, const char **argv) {
   // Sobel Runs
   total_h2d = 0, total_kernel = 0, total_d2h = 0;
   SobelResult sobel{};
-  for (int i = 0; i < GAUSSIAN_BENCHMARK_RUNS; i++) {
+  for (int i = 0; i < BENCHMARK_RUNS; i++) {
     if (i > 0)
       sobel_cleanup(sobel);
     sobel = sobel_execute(host_src_processed, width, height);
@@ -121,12 +121,12 @@ int main(int argc, const char **argv) {
     total_d2h += sobel.ms_d2h;
   }
 
-  printf("--- Sobel Filter (%d runs avg) ---\n", GAUSSIAN_BENCHMARK_RUNS);
-  printf("H->D:   %.3f ms\n", total_h2d / GAUSSIAN_BENCHMARK_RUNS);
-  printf("Kernel: %.3f ms\n", total_kernel / GAUSSIAN_BENCHMARK_RUNS);
-  printf("D->H:   %.3f ms\n", total_d2h / GAUSSIAN_BENCHMARK_RUNS);
+  printf("--- Sobel Filter (%d runs avg) ---\n", BENCHMARK_RUNS);
+  printf("H->D:   %.3f ms\n", total_h2d / BENCHMARK_RUNS);
+  printf("Kernel: %.3f ms\n", total_kernel / BENCHMARK_RUNS);
+  printf("D->H:   %.3f ms\n", total_d2h / BENCHMARK_RUNS);
   printf("Total:  %.3f ms\n",
-         (total_h2d + total_kernel + total_d2h) / GAUSSIAN_BENCHMARK_RUNS);
+         (total_h2d + total_kernel + total_d2h) / BENCHMARK_RUNS);
 
   // TODO
 
