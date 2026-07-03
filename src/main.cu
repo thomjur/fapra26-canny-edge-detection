@@ -2,12 +2,12 @@
 #include <cstdio>
 #include <cuda.h>
 
-#include "common.cuh"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#include "common.cuh"
 #include "gaussian.cuh"
 #include "sobel.cuh"
 
@@ -87,7 +87,6 @@ int main(int argc, const char **argv) {
   //
   // >>> SOBEL FILTER <<<
   //
-  // Currently only naive implementation of single run Sobel filter
   // First we manually load preprocessed Gaussian image for testing
   const uint8_t *host_src_processed =
       stbi_load("assets/gaussian.jpg", &width, &height, &channels_in_file, 1);
@@ -98,43 +97,36 @@ int main(int argc, const char **argv) {
   printf("Size         : %d x %d\n", width, height);
   printf("Channels     : %d (loaded as grayscale)\n", channels_in_file);
 
-  dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
-  dim3 grid_dim(
-      static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
-      static_cast<uint32_t>(
-          std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
-  const size_t img_size = width * height * sizeof(uint8_t);
-  // device buffers
-  uint8_t *device_src;
-  uint8_t *device_gradient;
-  float *device_direction;
-  auto *host_gradient = static_cast<uint8_t *>(malloc(img_size));
-  auto *host_direction =
-      static_cast<float *>(malloc(width * height * sizeof(float)));
-  CUDA_THROW_IF_FAILED(cudaMalloc(&device_src, img_size));
-  CUDA_THROW_IF_FAILED(cudaMalloc(&device_gradient, img_size));
-  CUDA_THROW_IF_FAILED(
-      cudaMalloc(&device_direction, width * height * sizeof(float)));
-  CUDA_THROW_IF_FAILED(cudaMemset(device_gradient, 0, img_size));
-  // Copy image H -> D
-  CUDA_THROW_IF_FAILED(cudaMemcpy(device_src, host_src_processed, img_size,
-                                  cudaMemcpyHostToDevice));
-  // Running Kernel
-  naive_sobel_filter<<<grid_dim, block_dim>>>(
-      device_src, width, height, device_gradient, device_direction);
+  // Warm-up
+  {
+    SobelResult warm_up = sobel_execute(host_src_processed, width, height);
+    printf("--- Sobel Filter (warm-up run) ---\n");
+    printf("H->D:   %.3f ms\n", warm_up.ms_h2d);
+    printf("Kernel: %.3f ms\n", warm_up.ms_kernel);
+    printf("D->H:   %.3f ms\n", warm_up.ms_d2h);
+    printf("Total:  %.3f ms\n",
+           warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
+    sobel_cleanup(warm_up);
+  }
 
-  // Copy image D -> H
-  CUDA_THROW_IF_FAILED(cudaMemcpy(host_gradient, device_gradient, img_size,
-                                  cudaMemcpyDeviceToHost));
-  CUDA_THROW_IF_FAILED(cudaMemcpy(host_direction, device_direction, img_size,
-                                  cudaMemcpyDeviceToHost));
-  // Save image on host
-  int32_t write_result = stbi_write_png("assets/sobel.jpg", width, height, 1,
-                                        host_gradient, width * 1);
-  if (write_result == 0)
-    fprintf(stderr, "Error: could not write image '%s'\n", out_path);
-  else
-    printf("Grayscale Sobel image written : %s\n", out_path);
+  // Sobel Runs
+  total_h2d = 0, total_kernel = 0, total_d2h = 0;
+  SobelResult sobel{};
+  for (int i = 0; i < GAUSSIAN_BENCHMARK_RUNS; i++) {
+    if (i > 0)
+      sobel_cleanup(sobel);
+    sobel = sobel_execute(host_src_processed, width, height);
+    total_h2d += sobel.ms_h2d;
+    total_kernel += sobel.ms_kernel;
+    total_d2h += sobel.ms_d2h;
+  }
+
+  printf("--- Sobel Filter (%d runs avg) ---\n", GAUSSIAN_BENCHMARK_RUNS);
+  printf("H->D:   %.3f ms\n", total_h2d / GAUSSIAN_BENCHMARK_RUNS);
+  printf("Kernel: %.3f ms\n", total_kernel / GAUSSIAN_BENCHMARK_RUNS);
+  printf("D->H:   %.3f ms\n", total_d2h / GAUSSIAN_BENCHMARK_RUNS);
+  printf("Total:  %.3f ms\n",
+         (total_h2d + total_kernel + total_d2h) / GAUSSIAN_BENCHMARK_RUNS);
 
   // TODO
 
@@ -154,6 +146,22 @@ int main(int argc, const char **argv) {
   // write output image
   //
 
+  // Save image on host
+  int32_t write_result = stbi_write_png("assets/sobel_grad.png", width, height,
+                                        1, sobel.host_grad, width * 1);
+  if (write_result == 0)
+    fprintf(stderr, "Error: could not write image 'assets/sobel_grad.png'\n");
+  else
+    printf("Grayscale Sobel gadient image written : assets/sobel_grad.png\n");
+
+  write_result = stbi_write_png("assets/sobel_dir.png", width, height, 1,
+                                sobel.host_dir, width * 1);
+  if (write_result == 0)
+    fprintf(stderr, "Error: could not write image 'assets/sobel_dir.png'\n");
+  else
+    printf("Grayscale Sobel gadient image written : assets/sobel_dir.png\n");
+
+  // Write Gaussian image
   write_result = stbi_write_png(out_path, width, height, 1,
                                 gaussian.host_buffer, width * 1);
   if (write_result == 0)
@@ -166,7 +174,10 @@ int main(int argc, const char **argv) {
   //
 
   gaussian_cleanup(gaussian);
+  sobel_cleanup(sobel);
   stbi_image_free(static_cast<void *>(const_cast<uint8_t *>(host_src)));
+  stbi_image_free(
+      static_cast<void *>(const_cast<uint8_t *>(host_src_processed)));
 
   return write_result == 0 ? -1 : 0;
 }
