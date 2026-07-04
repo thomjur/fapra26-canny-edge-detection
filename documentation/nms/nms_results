@@ -1,0 +1,23 @@
+
+
+NCU Report: nms_naive.csv  (warm-up run ID=0 excluded)
+Metric                                   | Runs |      Min |      Max |      Avg |   StdDev
+------------------------------------------------------------------------------------------
+Compute (SM) Throughput                  |   10 |    33.11 |    39.30 |    38.22 |    1.858
+Memory Throughput                        |   10 |    32.94 |    43.46 |    39.98 |    3.039
+DRAM Throughput                          |   10 |    32.94 |    43.46 |    39.98 |    3.039
+Achieved Occupancy                       |   10 |    82.42 |    83.14 |    82.65 |    0.276
+Warp Cycles Per Issued Instruction       |   10 |    16.52 |    20.80 |    17.35 |    1.578
+L1/TEX Hit Rate                          |   10 |    43.97 |    44.12 |    44.04 |    0.045
+L2 Hit Rate                              |   10 |    51.17 |    54.95 |    52.31 |    1.111
+
+NCU Report: nms_shared.csv  (warm-up run ID=0 excluded)
+Metric                                   | Runs |      Min |      Max |      Avg |   StdDev
+------------------------------------------------------------------------------------------
+Compute (SM) Throughput                  |   10 |    38.89 |    39.26 |    39.14 |    0.122
+Memory Throughput                        |   10 |    38.12 |    43.02 |    40.14 |    1.687
+DRAM Throughput                          |   10 |    38.12 |    43.02 |    40.14 |    1.687
+Achieved Occupancy                       |   10 |    82.45 |    82.89 |    82.53 |    0.132
+Warp Cycles Per Issued Instruction       |   10 |    16.47 |    17.37 |    16.69 |    0.267
+L1/TEX Hit Rate                          |   10 |    43.95 |    44.11 |    44.01 |    0.045
+L2 Hit Rate                              |   10 |    49.55 |    60.11 |    54.59 |    3.637
