@@ -217,71 +217,31 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
                                        float *out_dir_buffer) {
   // We use shared memory in this case
   // We must also allocate memory for the halo pixels
-  __shared__ uint8_t
-      shared_memory[BLOCK_SIZE * BLOCK_SIZE + 4 * BLOCK_SIZE + 4];
+  constexpr int TILE_W = BLOCK_SIZE + 2;
+  constexpr int TILE_H = BLOCK_SIZE + 2;
 
-  // Calculate pixel coordinates for this thread
-  int32_t x = blockIdx.x * blockDim.x + threadIdx.x;
-  int32_t y = blockIdx.y * blockDim.y + threadIdx.y;
-  int32_t STRIDE = BLOCK_SIZE + 2;
+  __shared__ uint8_t shared_memory[TILE_W * TILE_H];
 
-  // We first define a helper function to check if a pixel is actually in image
-  auto in_bounds = [&](int gx, int gy) {
-    return (gx >= 0 && gx < width && gy >= 0 && gy < height);
-  };
+  const int tx = threadIdx.x;
+  const int ty = threadIdx.y;
+  const int x = blockIdx.x * blockDim.x + tx;
+  const int y = blockIdx.y * blockDim.y + ty;
 
-  // We load pixels from src into shared memory
-  // First, we only load the current pixel into correct position in shared
-  // memory; Note that we know that the halo radius is always 1 due to the 3x3
-  // Sobel kernel
-  shared_memory[(threadIdx.y + 1) * STRIDE + (threadIdx.x + 1)] =
-      in_bounds(x, y) ? src_buffer[y * width + x] : 0;
+  // --- Kooperatives Laden der ganzen Tile inkl. Halo ---
+  const int tLinear = ty * blockDim.x + tx;
+  const int nThreads = blockDim.x * blockDim.y;
+  const int nTile = TILE_W * TILE_H;
 
-  //// 1. Optimization: Loading pixel grid + halo into shared memory
-  // Only edge pixels need to load halo into shared memory
+  for (int idx = tLinear; idx < nTile; idx += nThreads) {
+    int sx = idx % TILE_W; // 0..BLOCK+1
+    int sy = idx / TILE_W; // 0..BLOCK+1
+    int gx = blockIdx.x * blockDim.x + sx - 1;
+    int gy = blockIdx.y * blockDim.y + sy - 1;
 
-  // We start by loading the neighboring cols and rows outside of the actual
-  // grid
-  // We are in upper row
-  if (threadIdx.y == 0)
-    shared_memory[0 * STRIDE + (threadIdx.x + 1)] =
-        in_bounds(x, y - 1) ? src_buffer[(y - 1) * width + x] : 0;
-
-  // We are in final row
-  if (threadIdx.y == BLOCK_SIZE - 1)
-    shared_memory[(BLOCK_SIZE + 1) * STRIDE + (threadIdx.x + 1)] =
-        in_bounds(x, y + 1) ? src_buffer[(y + 1) * width + x] : 0;
-
-  // We are in first column
-  if (threadIdx.x == 0)
-    shared_memory[(threadIdx.y + 1) * STRIDE + 0] =
-        in_bounds(x - 1, y) ? src_buffer[y * width + x - 1] : 0;
-
-  // We are in last column
-  if (threadIdx.x == BLOCK_SIZE - 1)
-    shared_memory[(threadIdx.y + 1) * STRIDE + (BLOCK_SIZE + 1)] =
-        in_bounds(x + 1, y) ? src_buffer[y * width + x + 1] : 0;
-
-  // Next, we load the four edge pixels
-  if (threadIdx.x == 0 && threadIdx.y == 0)
-    shared_memory[0 * STRIDE + 0] =
-        in_bounds(x - 1, y - 1) ? src_buffer[(y - 1) * width + x - 1] : 0;
-
-  // Loading upper right corner pixel
-  if (threadIdx.x == BLOCK_SIZE - 1 && threadIdx.y == 0)
-    shared_memory[0 * STRIDE + (BLOCK_SIZE + 1)] =
-        in_bounds(x + 1, y - 1) ? src_buffer[(y - 1) * width + (x + 1)] : 0;
-
-  // Bottom left corner pixel
-  if (threadIdx.x == 0 && threadIdx.y == BLOCK_SIZE - 1)
-    shared_memory[(BLOCK_SIZE + 1) * STRIDE + 0] =
-        in_bounds(x - 1, y + 1) ? src_buffer[(y + 1) * width + (x - 1)] : 0;
-
-  // Bottom right corner pixel
-  if (threadIdx.x == BLOCK_SIZE - 1 && threadIdx.y == BLOCK_SIZE - 1)
-    shared_memory[(BLOCK_SIZE + 1) * STRIDE + (BLOCK_SIZE + 1)] =
-        in_bounds(x + 1, y + 1) ? src_buffer[(y + 1) * width + (x + 1)] : 0;
-
+    shared_memory[idx] = (gx >= 0 && gx < width && gy >= 0 && gy < height)
+                             ? src_buffer[gy * width + gx]
+                             : 0;
+  }
   __syncthreads();
 
   // Check if the thread is within the image boundaries
@@ -296,7 +256,7 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
     // Apply the Sobel kernels: convolve the 3x3 neighborhood with Gx and Gy
     for (int8_t i = -1; i <= 1; i++) {
       for (int8_t j = -1; j <= 1; j++) {
-        uint8_t pixel = shared_memory[(threadIdx.y + 1 + i) * STRIDE +
+        uint8_t pixel = shared_memory[(threadIdx.y + 1 + i) * TILE_W +
                                       (threadIdx.x + 1 + j)];
         gx += pixel * sobelX[i + 1][j + 1];
         gy += pixel * sobelY[i + 1][j + 1];
