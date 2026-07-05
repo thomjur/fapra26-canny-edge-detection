@@ -28,7 +28,8 @@
 //
 
 // 200 runs for stable avg — reduce to ~10 when profiling with NCU
-#define BENCHMARK_RUNS 10
+#define BENCHMARK_RUNS 1
+
 int main(int argc, const char **argv) {
   if (argc < 3) {
     fprintf(stderr, "Usage: ./canny.out <input.jpg> <output.png>\n");
@@ -53,7 +54,7 @@ int main(int argc, const char **argv) {
   // >>> GAUSSIAN FILTER <<<
   //
 
-  // Warm-up
+#ifdef WARMUP
   {
     GaussianResult warm_up = gaussian_execute(host_src, width, height);
     printf("--- Gaussian Filter (warm-up run) ---\n");
@@ -64,6 +65,7 @@ int main(int argc, const char **argv) {
            warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
     gaussian_cleanup(warm_up);
   }
+#endif
 
   // Gaussian Runs
   float total_h2d = 0, total_kernel = 0, total_d2h = 0;
@@ -97,7 +99,7 @@ int main(int argc, const char **argv) {
   printf("Size         : %d x %d\n", width, height);
   printf("Channels     : %d (loaded as grayscale)\n", channels_in_file);
 
-  // Warm-up
+#ifdef WARMUP
   {
     SobelResult warm_up = sobel_execute(host_src_processed, width, height);
     printf("--- Sobel Filter (warm-up run) ---\n");
@@ -108,6 +110,7 @@ int main(int argc, const char **argv) {
            warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
     sobel_cleanup(warm_up);
   }
+#endif
 
   // Sobel Runs
   total_h2d = 0, total_kernel = 0, total_d2h = 0;
