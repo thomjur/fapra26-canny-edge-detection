@@ -1,6 +1,18 @@
 #pragma once
 #include <cmath>
 #include <cstdint>
+#define SOBEL_KERNEL_RADIUS 1
+#ifndef SOBEL_OPT
+#define SOBEL_OPT 0
+#endif
+
+#if SOBEL_OPT == 0
+#define SOBEL_NAIVE
+#elif SOBEL_OPT == 1
+#define SOBEL_OPTIMIZED
+#else
+#error "SOBEL_OPT must be 0 or 1"
+#endif
 
 /**
  * @brief CUDA kernel for Sobel edge detection.
@@ -18,6 +30,22 @@ __global__ void naive_sobel_filter(const uint8_t *src_buffer,
                                    uint8_t *out_grad_buffer,
                                    float *out_dir_buffer);
 
+/**
+ * @brief Optimized CUDA kernel for Sobel edge detection.
+ *
+ * @param src_buffer Input image buffer (device memory, grayscale, 8-bit).
+ * @param width Width of the input image in pixels.
+ * @param height Height of the input image in pixels.
+ * @param out_grad_buffer Output buffer for gradient magnitudes (device memory,
+ * 8-bit).
+ * @param out_dir_buffer Output buffer for gradient directions (device memory,
+ * float).
+ */
+__global__ void optimized_sobel_filter(const uint8_t *src_buffer,
+                                       const int32_t width,
+                                       const int32_t height,
+                                       uint8_t *out_grad_buffer,
+                                       float *out_dir_buffer);
 /**
  * @struct SobelResult
  * @brief Holds the gradient and direction images from sobel_execute().
