@@ -9,6 +9,7 @@
 
 #include "common.cuh"
 #include "gaussian.cuh"
+#include "nms.cuh"
 #include "sobel.cuh"
 #include "nms.cuh"
 
@@ -37,8 +38,8 @@ int main(int argc, const char **argv) {
     return -1;
   }
 
-    const char *path     = argv[1];
-    const char *out_path = argv[2];
+  const char *path = argv[1];
+  const char *out_path = argv[2];
 
   // load image as grayscale
   int32_t width{}, height{}, channels_in_file{};
@@ -139,36 +140,38 @@ int main(int argc, const char **argv) {
   //
 
 #ifdef WARMUP
-    {
-        NmsResult warm_up = nms_execute(sobel.host_grad, sobel.host_dir, width, height);
-        printf("--- Non-Maximum Suppression (warm-up run) ---\n");
-        printf("H->D:   %.3f ms\n", warm_up.ms_h2d);
-        printf("Kernel: %.3f ms\n", warm_up.ms_kernel);
-        printf("D->H:   %.3f ms\n", warm_up.ms_d2h);
-        printf("Total:  %.3f ms\n", warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
-        nms_cleanup(warm_up);
-    }
+  {
+    NmsResult warm_up =
+        nms_execute(sobel.host_grad, sobel.host_dir, width, height);
+    printf("--- Non-Maximum Suppression (warm-up run) ---\n");
+    printf("H->D:   %.3f ms\n", warm_up.ms_h2d);
+    printf("Kernel: %.3f ms\n", warm_up.ms_kernel);
+    printf("D->H:   %.3f ms\n", warm_up.ms_d2h);
+    printf("Total:  %.3f ms\n",
+           warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
+    nms_cleanup(warm_up);
+  }
 #endif
 
-    // NMS Runs
-    total_h2d = 0, total_kernel = 0, total_d2h = 0;
-    NmsResult nms{};
-    for (int i = 0; i < BENCHMARK_RUNS; i++)
-    {
-        if (i > 0)
-            nms_cleanup(nms);
+  // NMS Runs
+  total_h2d = 0, total_kernel = 0, total_d2h = 0;
+  NmsResult nms{};
+  for (int i = 0; i < BENCHMARK_RUNS; i++) {
+    if (i > 0)
+      nms_cleanup(nms);
 
-        nms = nms_execute(sobel.host_grad, sobel.host_dir, width, height);
-        total_h2d    += nms.ms_h2d;
-        total_kernel += nms.ms_kernel;
-        total_d2h    += nms.ms_d2h;
-    }
+    nms = nms_execute(sobel.host_grad, sobel.host_dir, width, height);
+    total_h2d += nms.ms_h2d;
+    total_kernel += nms.ms_kernel;
+    total_d2h += nms.ms_d2h;
+  }
 
-    printf("--- Non-Maximum Suppression (%d runs avg) ---\n", BENCHMARK_RUNS);
-    printf("H->D:   %.3f ms\n", total_h2d / BENCHMARK_RUNS);
-    printf("Kernel: %.3f ms\n", total_kernel / BENCHMARK_RUNS);
-    printf("D->H:   %.3f ms\n", total_d2h / BENCHMARK_RUNS);
-    printf("Total:  %.3f ms\n", (total_h2d + total_kernel + total_d2h) / BENCHMARK_RUNS);
+  printf("--- Non-Maximum Suppression (%d runs avg) ---\n", BENCHMARK_RUNS);
+  printf("H->D:   %.3f ms\n", total_h2d / BENCHMARK_RUNS);
+  printf("Kernel: %.3f ms\n", total_kernel / BENCHMARK_RUNS);
+  printf("D->H:   %.3f ms\n", total_d2h / BENCHMARK_RUNS);
+  printf("Total:  %.3f ms\n",
+         (total_h2d + total_kernel + total_d2h) / BENCHMARK_RUNS);
 
   //
   // >>> HYSTERESIS THRESHOLDING <<<
@@ -180,53 +183,59 @@ int main(int argc, const char **argv) {
   // write output image
   //
 
-    int32_t write_result = 0;
+  int32_t write_result = 0;
 
-    // Write Gaussian image
-    write_result = stbi_write_png("assets/gaussian.png", width, height, 1, gaussian.host_buffer, width * 1);
-    if (write_result == 0)
-        fprintf(stderr, "Error: could not write image '%s'\n", "assets/gaussian.png");
-    else
-        printf("Grayscale written : %s\n", out_path);
+  // Write Gaussian image
+  write_result = stbi_write_png("assets/gaussian.png", width, height, 1,
+                                gaussian.host_buffer, width * 1);
+  if (write_result == 0)
+    fprintf(stderr, "Error: could not write image '%s'\n",
+            "assets/gaussian.png");
+  else
+    printf("Grayscale written : %s\n", out_path);
 
-    // Write Sobel images
-    write_result = stbi_write_png("assets/sobel_grad.png", width, height, 1, sobel.host_grad, width * 1);
-    if (write_result == 0)
-        fprintf(stderr, "Error: could not write image 'assets/sobel_grad.png'\n");
-    else
-        printf("Grayscale Sobel gadient image written : assets/sobel_grad.png\n");
+  // Write Sobel images
+  write_result = stbi_write_png("assets/sobel_grad.png", width, height, 1,
+                                sobel.host_grad, width * 1);
+  if (write_result == 0)
+    fprintf(stderr, "Error: could not write image 'assets/sobel_grad.png'\n");
+  else
+    printf("Grayscale Sobel gadient image written : assets/sobel_grad.png\n");
 
-    write_result = stbi_write_png("assets/sobel_dir.png", width, height, 1, sobel.host_dir, width * 1);
-    if (write_result == 0)
-        fprintf(stderr, "Error: could not write image 'assets/sobel_dir.png'\n");
-    else
-        printf("Grayscale Sobel gadient image written : assets/sobel_dir.png\n");
+  write_result = stbi_write_png("assets/sobel_dir.png", width, height, 1,
+                                sobel.host_dir, width * 1);
+  if (write_result == 0)
+    fprintf(stderr, "Error: could not write image 'assets/sobel_dir.png'\n");
+  else
+    printf("Grayscale Sobel gadient image written : assets/sobel_dir.png\n");
 
-    // Write NMS image
-    write_result = stbi_write_png("assets/nms.png", width, height, 1, nms.host_nms, width * 1);
-    if (write_result == 0)
-        fprintf(stderr, "Error: could not write image 'assets/nms.png'\n");
-    else
-        printf("Thinned NMS image written : assets/nms.png\n");
+  // Write NMS image
+  write_result = stbi_write_png("assets/nms.png", width, height, 1,
+                                nms.host_nms, width * 1);
+  if (write_result == 0)
+    fprintf(stderr, "Error: could not write image 'assets/nms.png'\n");
+  else
+    printf("Thinned NMS image written : assets/nms.png\n");
 
+  // Write NMS image (current pipeline output)
+  write_result =
+      stbi_write_png(out_path, width, height, 1, nms.host_nms, width * 1);
+  if (write_result == 0)
+    fprintf(stderr, "Error: could not write image '%s'\n", out_path);
+  else
+    printf("Pipeline output (NMS) written : %s\n", out_path);
 
-    // Write NMS image (current pipeline output)
-    write_result = stbi_write_png(out_path, width, height, 1, nms.host_nms, width * 1);
-    if (write_result == 0)
-        fprintf(stderr, "Error: could not write image '%s'\n", out_path);
-    else
-        printf("Pipeline output (NMS) written : %s\n", out_path);
+  //
+  // clean up
+  //
 
-    //
-    // clean up
-    //
+  gaussian_cleanup(gaussian);
+  sobel_cleanup(sobel);
+  nms_cleanup(nms);
 
-    gaussian_cleanup(gaussian);
-    sobel_cleanup(sobel);
-    nms_cleanup(nms);
+  stbi_image_free(static_cast<void *>(const_cast<uint8_t *>(host_src)));
+  stbi_image_free(
+      static_cast<void *>(const_cast<uint8_t *>(host_src_processed)));
 
-    stbi_image_free(static_cast<void *>(const_cast<uint8_t *>(host_src)));
-    stbi_image_free(static_cast<void *>(const_cast<uint8_t *>(host_src_processed)));
-
-    return write_result == 0 ? -1 : 0;
+  return write_result == 0 ? -1 : 0;
 }

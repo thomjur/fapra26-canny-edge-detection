@@ -199,7 +199,7 @@ __global__ void naive_sobel_filter(const uint8_t *src_buffer,
  * 1) Implemented shared memory to avoid loading neighboring pixels from global
  * memory in each thread.
  * 2) Implemented a more simple version of the gradient
- * calculation (TODO).
+ * calculation.
  *
  * @param src_buffer Input image buffer (device memory, grayscale, 8-bit).
  * @param width Width of the input image in pixels.
@@ -229,7 +229,8 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
   const int32_t ty = static_cast<int32_t>(threadIdx.y);
 
   // shared memory tile including halo border of 1
-  constexpr int32_t tile_size = BLOCK_SIZE + 2;
+  const uint8_t SOBEL_RADIUS = 1;
+  constexpr int32_t tile_size = BLOCK_SIZE + 2 * SOBEL_RADIUS;
   __shared__ uint8_t shared_memory[tile_size * tile_size];
 
   // load tile into shared memory (including halo)
@@ -238,9 +239,9 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
     for (int32_t i = tx; i < tile_size; i += BLOCK_SIZE) {
       // map tile position back to image coordinates (subtract halo offset)
       const int32_t img_x =
-          static_cast<int32_t>(blockIdx.x * BLOCK_SIZE) + i - 1;
+          static_cast<int32_t>(blockIdx.x * BLOCK_SIZE) + i - SOBEL_RADIUS;
       const int32_t img_y =
-          static_cast<int32_t>(blockIdx.y * BLOCK_SIZE) + j - 1;
+          static_cast<int32_t>(blockIdx.y * BLOCK_SIZE) + j - SOBEL_RADIUS;
 
       // zero-padding for pixels outside image bounds
       shared_memory[j * tile_size + i] =
