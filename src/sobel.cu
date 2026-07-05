@@ -217,31 +217,41 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
                                        float *out_dir_buffer) {
   // We use shared memory in this case
   // We must also allocate memory for the halo pixels
-  constexpr int TILE_W = BLOCK_SIZE + 2;
-  constexpr int TILE_H = BLOCK_SIZE + 2;
+  // global pixel position in the image
+  const int32_t x = static_cast<int32_t>(blockIdx.x * blockDim.x + threadIdx.x);
+  const int32_t y = static_cast<int32_t>(blockIdx.y * blockDim.y + threadIdx.y);
+  if (x >= width || y >= height)
+    return;
 
-  __shared__ uint8_t shared_memory[TILE_W * TILE_H];
+  // local thread position within the block (0..BLOCK_SIZE-1)
+  // used to index into the shared memory tile
+  const int32_t tx = static_cast<int32_t>(threadIdx.x);
+  const int32_t ty = static_cast<int32_t>(threadIdx.y);
 
-  const int tx = threadIdx.x;
-  const int ty = threadIdx.y;
-  const int x = blockIdx.x * blockDim.x + tx;
-  const int y = blockIdx.y * blockDim.y + ty;
+  // shared memory tile including halo border of 1
+  constexpr int32_t tile_size = BLOCK_SIZE + 2;
+  __shared__ uint8_t shared_memory[tile_size * tile_size];
 
-  // --- Kooperatives Laden der ganzen Tile inkl. Halo ---
-  const int tLinear = ty * blockDim.x + tx;
-  const int nThreads = blockDim.x * blockDim.y;
-  const int nTile = TILE_W * TILE_H;
+  // load tile into shared memory (including halo)
+  // each thread loads one or more pixels depending on tile size vs block size
+  for (int32_t j = ty; j < tile_size; j += BLOCK_SIZE) {
+    for (int32_t i = tx; i < tile_size; i += BLOCK_SIZE) {
+      // map tile position back to image coordinates (subtract halo offset)
+      const int32_t img_x =
+          static_cast<int32_t>(blockIdx.x * BLOCK_SIZE) + i - 1;
+      const int32_t img_y =
+          static_cast<int32_t>(blockIdx.y * BLOCK_SIZE) + j - 1;
 
-  for (int idx = tLinear; idx < nTile; idx += nThreads) {
-    int sx = idx % TILE_W; // 0..BLOCK+1
-    int sy = idx / TILE_W; // 0..BLOCK+1
-    int gx = blockIdx.x * blockDim.x + sx - 1;
-    int gy = blockIdx.y * blockDim.y + sy - 1;
-
-    shared_memory[idx] = (gx >= 0 && gx < width && gy >= 0 && gy < height)
-                             ? src_buffer[gy * width + gx]
-                             : 0;
+      // zero-padding for pixels outside image bounds
+      shared_memory[j * tile_size + i] =
+          (img_x >= 0 && img_x < width && img_y >= 0 && img_y < height)
+              ? src_buffer[img_y * width + img_x]
+              : 0;
+    }
   }
+
+  // wait until every thread has finished loading before any thread starts
+  // reading
   __syncthreads();
 
   // Check if the thread is within the image boundaries
@@ -256,7 +266,7 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
     // Apply the Sobel kernels: convolve the 3x3 neighborhood with Gx and Gy
     for (int8_t i = -1; i <= 1; i++) {
       for (int8_t j = -1; j <= 1; j++) {
-        uint8_t pixel = shared_memory[(threadIdx.y + 1 + i) * TILE_W +
+        uint8_t pixel = shared_memory[(threadIdx.y + 1 + i) * tile_size +
                                       (threadIdx.x + 1 + j)];
         gx += pixel * sobelX[i + 1][j + 1];
         gy += pixel * sobelY[i + 1][j + 1];
