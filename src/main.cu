@@ -9,7 +9,6 @@
 
 #include "common.cuh"
 #include "gaussian.cuh"
-#include "nms.cuh"
 #include "sobel.cuh"
 
 //
@@ -29,15 +28,13 @@
 //
 
 // 200 runs for stable avg — reduce to ~10 when profiling with NCU
-#define BENCHMARK_RUNS 10
+#define BENCHMARK_RUNS 1
 
-int main(int argc, const char **argv)
-{
-    if (argc < 3)
-    {
-        fprintf(stderr, "Usage: ./canny.out <input.jpg> <output.png>\n");
-        return -1;
-    }
+int main(int argc, const char **argv) {
+  if (argc < 3) {
+    fprintf(stderr, "Usage: ./canny.out <input.jpg> <output.png>\n");
+    return -1;
+  }
 
     const char *path     = argv[1];
     const char *out_path = argv[2];

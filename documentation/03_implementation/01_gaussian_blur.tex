@@ -1,0 +1,147 @@
+\subsection{Schritt 1: Gaussian Blur}
+\label{sec:impl_gaussian}
+
+\subsubsection{Naive Implementierung}
+
+Die Gaußgewichte werden zunächst auf der CPU als zweidimensionales Raster der
+Größe $(2 \cdot \texttt{BLUR\_RADIUS} + 1)^2$ vorberechnet und normalisiert,
+sodass ihre Summe~1 ergibt und die Bildhelligkeit erhalten bleibt
+(Gleichung~\ref{eq:gaussian}). Das Gewichtsraster wird einmalig vor dem
+Kernelaufruf per \texttt{cudaMemcpy} auf die GPU übertragen und steht dort
+allen Threads als Read-only-Buffer im globalen Speicher zur Verfügung.
+Das resultierende $3 \times 3$ Gewichtsraster für $\sigma = 1.0$ ist in
+Abbildung~\ref{fig:gaussian_example} dargestellt.
+
+\begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+        pixel/.style={rectangle, draw, minimum size=1.3cm, align=center, font=\small, inner sep=2pt},
+        k_low/.style={pixel,  fill=red!20},
+        k_mid/.style={pixel,  fill=red!35},
+        k_high/.style={pixel, fill=red!55}
+    ]
+
+        \node[k_low]  at (0,0)      {0.0894};
+        \node[k_mid]  at (1.4,0)    {0.1201};
+        \node[k_low]  at (2.8,0)    {0.0894};
+        \node[k_mid]  at (0,-1.4)   {0.1201};
+        \node[k_high] at (1.4,-1.4) {0.1615};
+        \node[k_mid]  at (2.8,-1.4) {0.1201};
+        \node[k_low]  at (0,-2.8)   {0.0894};
+        \node[k_mid]  at (1.4,-2.8) {0.1201};
+        \node[k_low]  at (2.8,-2.8) {0.0894};
+
+        \node[font=\Large] at (4.0,-1.4) {$\times$};
+
+        \node[pixel, fill=black!90, text=white] at (5.3,0)    {L10};
+        \node[pixel, fill=black!70, text=white] at (6.7,0)    {L20};
+        \node[pixel, fill=black!50, text=white] at (8.1,0)    {L30};
+        \node[pixel, fill=black!45, text=white] at (5.3,-1.4) {L50};
+        \node[pixel, fill=black!50, text=white] at (6.7,-1.4) {L48};
+        \node[pixel, fill=black!90, text=white] at (8.1,-1.4) {L10};
+        \node[pixel, fill=black!10]             at (5.3,-2.8) {L90};
+        \node[pixel, fill=black!60, text=white] at (6.7,-2.8) {L30};
+        \node[pixel, fill=black!70, text=white] at (8.1,-2.8) {L20};
+
+        \node[font=\Large] at (9.4,-1.4) {$=$};
+
+        \node[pixel, fill=black!55, text=white] at (10.7,-1.4) {L34};
+
+    \end{tikzpicture}
+    \caption{Gaussian Blur, gewichteter Mittelwert am Beispielpixel L48 $\rightarrow$ L34}
+    \label{fig:gaussian_example}
+\end{figure}
+
+Im CUDA-Kernel \texttt{gaussian\_filter()} ist jeder Thread für genau einen
+Ausgabepixel zuständig. Die Thread-Position ergibt sich aus \texttt{blockIdx}
+und \texttt{threadIdx} (Listing~\ref{lst:gaussian_kernel}, Zeile~1--2), Threads
+außerhalb der Bildgrenzen werden sofort verworfen (Zeile~3). Jeder Thread
+iteriert anschließend über alle $(2r+1)^2$ Nachbarpixel, liest jeden Wert
+direkt aus dem globalen Speicher und akkumuliert die gewichtete Summe
+(Zeile~5--10). Pixel außerhalb der Bildgrenzen werden mit~0 aufgefüllt
+(Zero-Padding). Das Ergebnis wird in den Ausgabepuffer geschrieben (Zeile~12).
+
+\begin{lstlisting}[style=cuda, basicstyle=\ttfamily\scriptsize,
+    caption={Pseudocode, gaussian\_filter Kernel (naive)},
+    label={lst:gaussian_kernel}, numbers=left]
+x = blockIdx.x * blockDim.x + threadIdx.x
+y = blockIdx.y * blockDim.y + threadIdx.y
+if (x, y) ausserhalb des Bildes: return
+
+color = 0.0
+for j = -radius to +radius:
+    for i = -radius to +radius:
+        if (x+i, y+j) innerhalb des Bildes:
+            pixel = src_buffer[(y+j) * width + (x+i)]
+        color += pixel * weights[(j+r) * blur_size + (i+r)]
+
+out_buffer[y * width + x] = color
+\end{lstlisting}
+
+Die Threads eines Blocks greifen dabei in y-Richtung auf Adressen mit
+Abstand \texttt{width} zu, wodurch die Zugriffe auf den globalen Speicher
+nicht coalesced erfolgen. Dies motiviert die Shared Memory Optimierung in
+Abschnitt~\ref{sec:shared_memory_gaussian}; die quantitative Auswertung
+findet sich in Abschnitt~\ref{sec:results_gaussian}.
+
+\subsubsection{Shared Memory Optimierung}
+\label{sec:shared_memory_gaussian}
+
+Der zentrale Engpass der naiven Implementierung sind die uncoalesced Global
+Memory Zugriffe: bei einem Kernel der Größe $(2r+1)^2$ liest jeder Thread
+bis zu $(2r+1)^2$ Pixel aus dem DRAM, wobei Pixel die von mehreren
+Threads benötigt werden redundant geladen werden. Horvath et al.\ adressieren
+dieses Problem durch Shared Memory Tiling, bei dem Threads eines Blocks
+kooperativ eine Bildkachel in den schnellen On-Chip Speicher laden, bevor die
+eigentliche Faltung beginnt \cite[S.~2]{horvath2023}.
+
+Die Kachel hat die Größe $(\texttt{BLOCK\_SIZE} + 2 \cdot
+\texttt{BLUR\_RADIUS})^2$ und enthält neben den eigentlichen Ausgabepixeln
+des Blocks auch den sogenannten Halo-Rand. Da die Kachel größer ist als der
+Block selbst, lädt jeder Thread mittels eines Stride-Loops einen oder mehrere
+Pixel in den Shared Memory. Nach dem Laden wird \texttt{\_\_syncthreads()}
+aufgerufen, um sicherzustellen, dass alle Threads ihre Pixel geschrieben haben
+bevor die Faltung beginnt. Die Gaußgewichte werden zusätzlich in
+\texttt{\_\_constant\_\_} Memory ausgelagert, da alle Threads exakt dieselben
+Gewichte lesen und \texttt{\_\_constant\_\_} Memory für uniforme Zugriffe
+hardwareseitig gecacht wird.
+
+Die drei wesentlichen Änderungen gegenüber der naiven Implementierung sind:
+
+\begin{itemize}
+    \item \texttt{\_\_shared\_\_ uint8\_t tile[tile\_size * tile\_size]},
+    eine kooperativ geladene Bildkachel inklusive Halo-Rand der Breite
+    \texttt{BLUR\_RADIUS}
+    \item \texttt{\_\_syncthreads()}, Synchronisationsbarriere nach dem
+    kooperativen Laden
+    \item \texttt{\_\_constant\_\_ float device\_weights[...]},
+    Gaußgewichte in Constant Memory, Upload per \texttt{cudaMemcpyToSymbol()}
+\end{itemize}
+
+Die Auswirkung dieser Optimierung auf Laufzeit und Speicherdurchsatz wird
+in Abschnitt~\ref{sec:results_gaussian} ausgewertet.
+
+\subsubsection{Pinned Memory Optimierung}
+\label{sec:pinned_memory_gaussian}
+
+Pinned Memory (Page-locked Memory) ist Host-seitiger Speicher, der vom
+Betriebssystem nicht ausgelagert werden kann, wodurch direkte DMA-Transfers
+ohne zwischengeschalteten CPU-Cache möglich sind. Die Änderung gegenüber
+der Shared Memory Implementierung beschränkt sich ausschließlich auf die
+Host-seitige Allokation (\texttt{cudaMallocHost()} statt \texttt{malloc()}),
+der Kernel bleibt identisch. Der erwartete Vorteil zeigt sich primär beim
+Device-to-Host-Transfer (siehe Abschnitt~\ref{sec:results_gaussian}).
+
+\subsubsection{Warp-Level Optimierung}
+
+Als vierte Optimierungsstufe wurden Warp-Level Intrinsics (\texttt{\_\_shfl\_sync()})
+evaluiert. Diese ermöglichen den direkten Datenaustausch zwischen Threads
+innerhalb eines Warps ohne Shared Memory und ohne \texttt{\_\_syncthreads()}.
+
+Für 2D-Stencil-Operationen wie den Gaussian Blur ist dieser Ansatz jedoch
+nicht geeignet, da \texttt{\_\_shfl\_sync()} primär für 1D-Reduktionen
+konzipiert ist und bei zweidimensionalen Nachbarschaftszugriffen keinen
+strukturellen Vorteil bietet. Yadav et al.\ bestätigen dies: in ihren
+Messungen erreicht die Warp-Variante 79.29\,\% Compute/Memory Throughput,
+während Shared Memory 83.33\,\% erzielt \cite{yadav2025}. Eine eigene
+Implementierung wurde daher nicht vorgenommen.
