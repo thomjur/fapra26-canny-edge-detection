@@ -42,98 +42,105 @@ int main(int argc, const char **argv)
     const char *path     = argv[1];
     const char *out_path = argv[2];
 
-    // load image as grayscale
-    int32_t width{}, height{}, channels_in_file{};
-    const uint8_t *host_src = stbi_load(path, &width, &height, &channels_in_file, 1);
-    if (host_src == nullptr)
-        return -1;
+  // load image as grayscale
+  int32_t width{}, height{}, channels_in_file{};
+  const uint8_t *host_src =
+      stbi_load(path, &width, &height, &channels_in_file, 1);
+  if (host_src == nullptr)
+    return -1;
 
-    printf("Image loaded : %s\n", path);
-    printf("Size         : %d x %d\n", width, height);
-    printf("Channels     : %d (loaded as grayscale)\n", channels_in_file);
+  printf("Image loaded : %s\n", path);
+  printf("Size         : %d x %d\n", width, height);
+  printf("Channels     : %d (loaded as grayscale)\n", channels_in_file);
 
-    //
-    // >>> GAUSSIAN FILTER <<<
-    //
+  //
+  // >>> GAUSSIAN FILTER <<<
+  //
 
-    // Warm-up
-    {
-        GaussianResult warm_up = gaussian_execute(host_src, width, height);
-        printf("--- Gaussian Filter (warm-up run) ---\n");
-        printf("H->D:   %.3f ms\n", warm_up.ms_h2d);
-        printf("Kernel: %.3f ms\n", warm_up.ms_kernel);
-        printf("D->H:   %.3f ms\n", warm_up.ms_d2h);
-        printf("Total:  %.3f ms\n", warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
-        gaussian_cleanup(warm_up);
-    }
+#ifdef WARMUP
+  {
+    GaussianResult warm_up = gaussian_execute(host_src, width, height);
+    printf("--- Gaussian Filter (warm-up run) ---\n");
+    printf("H->D:   %.3f ms\n", warm_up.ms_h2d);
+    printf("Kernel: %.3f ms\n", warm_up.ms_kernel);
+    printf("D->H:   %.3f ms\n", warm_up.ms_d2h);
+    printf("Total:  %.3f ms\n",
+           warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
+    gaussian_cleanup(warm_up);
+  }
+#endif
 
-    // Gaussian Runs
-    float total_h2d = 0, total_kernel = 0, total_d2h = 0;
-    GaussianResult gaussian{};
-    for (int i = 0; i < BENCHMARK_RUNS; i++)
-    {
-        if (i > 0)
-            gaussian_cleanup(gaussian);
-        gaussian     = gaussian_execute(host_src, width, height);
-        total_h2d    += gaussian.ms_h2d;
-        total_kernel += gaussian.ms_kernel;
-        total_d2h    += gaussian.ms_d2h;
-    }
+  // Gaussian Runs
+  float total_h2d = 0, total_kernel = 0, total_d2h = 0;
+  GaussianResult gaussian{};
+  for (int i = 0; i < BENCHMARK_RUNS; i++) {
+    if (i > 0)
+      gaussian_cleanup(gaussian);
+    gaussian = gaussian_execute(host_src, width, height);
+    total_h2d += gaussian.ms_h2d;
+    total_kernel += gaussian.ms_kernel;
+    total_d2h += gaussian.ms_d2h;
+  }
 
-    printf("--- Gaussian Filter (%d runs avg) ---\n", BENCHMARK_RUNS);
-    printf("H->D:   %.3f ms\n", total_h2d / BENCHMARK_RUNS);
-    printf("Kernel: %.3f ms\n", total_kernel / BENCHMARK_RUNS);
-    printf("D->H:   %.3f ms\n", total_d2h / BENCHMARK_RUNS);
-    printf("Total:  %.3f ms\n", (total_h2d + total_kernel + total_d2h) / BENCHMARK_RUNS);
+  printf("--- Gaussian Filter (%d runs avg) ---\n", BENCHMARK_RUNS);
+  printf("H->D:   %.3f ms\n", total_h2d / BENCHMARK_RUNS);
+  printf("Kernel: %.3f ms\n", total_kernel / BENCHMARK_RUNS);
+  printf("D->H:   %.3f ms\n", total_d2h / BENCHMARK_RUNS);
+  printf("Total:  %.3f ms\n",
+         (total_h2d + total_kernel + total_d2h) / BENCHMARK_RUNS);
 
-    //
-    // >>> SOBEL FILTER <<<
-    //
+  //
+  // >>> SOBEL FILTER <<<
+  //
+  // First we manually load preprocessed Gaussian image for testing
+  const uint8_t *host_src_processed =
+      stbi_load("assets/gaussian.jpg", &width, &height, &channels_in_file, 1);
+  if (host_src_processed == nullptr)
+    return -1;
 
-    // First we manually load preprocessed Gaussian image for testing
-    const uint8_t *host_src_processed = stbi_load("assets/gaussian.png", &width, &height, &channels_in_file, 1);
-    if (host_src_processed == nullptr)
-        return -1;
+  printf("Image loaded : %s\n", "gaussian_img.jpg");
+  printf("Size         : %d x %d\n", width, height);
+  printf("Channels     : %d (loaded as grayscale)\n", channels_in_file);
 
-    printf("Image loaded : %s\n", "gaussian_img.png");
-    printf("Size         : %d x %d\n", width, height);
-    printf("Channels     : %d (loaded as grayscale)\n", channels_in_file);
+#ifdef WARMUP
+  {
+    SobelResult warm_up = sobel_execute(host_src_processed, width, height);
+    printf("--- Sobel Filter (warm-up run) ---\n");
+    printf("H->D:   %.3f ms\n", warm_up.ms_h2d);
+    printf("Kernel: %.3f ms\n", warm_up.ms_kernel);
+    printf("D->H:   %.3f ms\n", warm_up.ms_d2h);
+    printf("Total:  %.3f ms\n",
+           warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
+    sobel_cleanup(warm_up);
+  }
+#endif
 
-    // Warm-up
-    {
-        SobelResult warm_up = sobel_execute(host_src_processed, width, height);
-        printf("--- Sobel Filter (warm-up run) ---\n");
-        printf("H->D:   %.3f ms\n", warm_up.ms_h2d);
-        printf("Kernel: %.3f ms\n", warm_up.ms_kernel);
-        printf("D->H:   %.3f ms\n", warm_up.ms_d2h);
-        printf("Total:  %.3f ms\n", warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
-        sobel_cleanup(warm_up);
-    }
+  // Sobel Runs
+  total_h2d = 0, total_kernel = 0, total_d2h = 0;
+  SobelResult sobel{};
+  for (int i = 0; i < BENCHMARK_RUNS; i++) {
+    if (i > 0)
+      sobel_cleanup(sobel);
+    sobel = sobel_execute(host_src_processed, width, height);
+    total_h2d += sobel.ms_h2d;
+    total_kernel += sobel.ms_kernel;
+    total_d2h += sobel.ms_d2h;
+  }
 
-    // Sobel Runs
-    total_h2d = 0, total_kernel = 0, total_d2h = 0;
-    SobelResult sobel{};
-    for (int i = 0; i < BENCHMARK_RUNS; i++)
-    {
-        if (i > 0)
-            sobel_cleanup(sobel);
-        sobel        = sobel_execute(host_src_processed, width, height);
-        total_h2d    += sobel.ms_h2d;
-        total_kernel += sobel.ms_kernel;
-        total_d2h    += sobel.ms_d2h;
-    }
+  printf("--- Sobel Filter (%d runs avg) ---\n", BENCHMARK_RUNS);
+  printf("H->D:   %.3f ms\n", total_h2d / BENCHMARK_RUNS);
+  printf("Kernel: %.3f ms\n", total_kernel / BENCHMARK_RUNS);
+  printf("D->H:   %.3f ms\n", total_d2h / BENCHMARK_RUNS);
+  printf("Total:  %.3f ms\n",
+         (total_h2d + total_kernel + total_d2h) / BENCHMARK_RUNS);
 
-    printf("--- Sobel Filter (%d runs avg) ---\n", BENCHMARK_RUNS);
-    printf("H->D:   %.3f ms\n", total_h2d / BENCHMARK_RUNS);
-    printf("Kernel: %.3f ms\n", total_kernel / BENCHMARK_RUNS);
-    printf("D->H:   %.3f ms\n", total_d2h / BENCHMARK_RUNS);
-    printf("Total:  %.3f ms\n", (total_h2d + total_kernel + total_d2h) / BENCHMARK_RUNS);
+  // TODO
 
-    //
-    // >>> NON-MAXIMUM SUPPRESSION <<<
-    //
+  //
+  // >>> NON-MAXIMUM SUPPRESSION <<<
+  //
 
-    // Warm-up
+#ifdef WARMUP
     {
         NmsResult warm_up = nms_execute(sobel.host_grad, sobel.host_dir, width, height);
         printf("--- Non-Maximum Suppression (warm-up run) ---\n");
@@ -143,6 +150,7 @@ int main(int argc, const char **argv)
         printf("Total:  %.3f ms\n", warm_up.ms_h2d + warm_up.ms_kernel + warm_up.ms_d2h);
         nms_cleanup(warm_up);
     }
+#endif
 
     // NMS Runs
     total_h2d = 0, total_kernel = 0, total_d2h = 0;
@@ -164,15 +172,15 @@ int main(int argc, const char **argv)
     printf("D->H:   %.3f ms\n", total_d2h / BENCHMARK_RUNS);
     printf("Total:  %.3f ms\n", (total_h2d + total_kernel + total_d2h) / BENCHMARK_RUNS);
 
-    //
-    // >>> HYSTERESIS THRESHOLDING <<<
-    //
+  //
+  // >>> HYSTERESIS THRESHOLDING <<<
+  //
 
-    // TODO
+  // TODO
 
-    //
-    // write output image
-    //
+  //
+  // write output image
+  //
 
     int32_t write_result = 0;
 
