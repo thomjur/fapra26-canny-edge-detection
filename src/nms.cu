@@ -57,6 +57,9 @@ NmsResult nms_execute(
 #ifdef NMS_NAIVE
     non_maximum_suppression<<<grid_dim, block_dim>>>(device_magnitude, device_direction, width, height, device_dst);
 #endif
+#ifdef NMS_SHARED
+    non_maximum_suppression<<<grid_dim, block_dim>>>(device_magnitude, device_direction, width, height, device_dst);
+#endif
     cudaEventRecord(t2);
 
     // D->H

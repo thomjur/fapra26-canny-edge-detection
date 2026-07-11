@@ -10,6 +10,7 @@
 #include "common.cuh"
 #include "gaussian.cuh"
 #include "sobel.cuh"
+#include "nms.cuh"
 
 //
 // Canny Edge Detection Pipeline
