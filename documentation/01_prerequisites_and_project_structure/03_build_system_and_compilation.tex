@@ -1,2 +1,39 @@
 \subsection{Build-System und Kompilierung}
 \label{subsec:build-system-und-kompilierung}
+
+Die Optimierungsstufe je Pipeline-Stufe wird zur Kompilierzeit über
+Preprocessor-Makros gewählt, wodurch für jede Konfiguration ein eigenes,
+spezialisiertes Binary ohne Laufzeit-Overhead entsteht. Die Stufen
+bauen dabei aufeinander auf, statt unabhängige Alternativen
+darzustellen: Bei Gaussian ersetzt Shared Memory zunächst die naive
+Faltung durch Tiling, während Pinned Memory zusätzlich den
+D→H-Transfer beschleunigt, sodass die höchste Stufe stets beides
+kombiniert.
+
+\texttt{build\_release.sh} übersetzt jede Übersetzungseinheit einzeln
+mit \texttt{nvcc} und reicht die Stufe über die Umgebungsvariablen
+\texttt{GAUSSIAN\_OPT}, \texttt{SOBEL\_OPT} und \texttt{NMS\_OPT} als
+\texttt{-D}-Flags weiter, zum Beispiel:
+
+\begin{verbatim}
+GAUSSIAN_OPT=1 SOBEL_OPT=0 NMS_OPT=1 ./build_release.sh
+\end{verbatim}
+
+Ohne Angabe greifen die Standardwerte (\texttt{GAUSSIAN\_OPT=2},
+\texttt{SOBEL\_OPT=1}, \texttt{NMS\_OPT=1}), jeweils die am weitesten
+optimierte Variante, während \texttt{WARMUP} (Standard: aktiviert)
+einen Aufwärm-Kerneldurchlauf vor der Zeitmessung steuert. Da separable
+Device-Compilation (\texttt{-rdc=true}) verwendet wird, ist zudem ein
+Device-Link-Schritt (\texttt{nvcc~-dlink}) vor dem finalen Host-Link
+nötig, bei dem die Ziel-Architektur (\texttt{-arch=sm\_75}) erneut
+angegeben werden muss, da \texttt{nvcc} sonst implizit auf eine ältere
+Architektur zurückfällt.
+
+\begin{sloppypar}
+    Analog erzeugt \texttt{build\_debug.sh} eine Debug-Variante mit den
+    Flags \texttt{-G~-O0}, ohne \texttt{--use\_fast\_math}; alle
+    berichteten Messungen stammen ausschließlich aus dem Release-Build.
+    Das Ausführen der jeweils gebauten Binary übernehmen die separaten
+    Skripte \texttt{run\_release.sh} bzw. \texttt{run\_debug.sh} mit fest
+    hinterlegtem Ein- und Ausgabepfad.
+\end{sloppypar}

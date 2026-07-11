@@ -1,16 +1,14 @@
 \subsection{Messmethodologie}
 \label{subsec:messmethodologie}
 
-Die Performance-Messungen wurden unter nicht-isolierten Bedingungen durchgeführt.
-Folgende Faktoren können die Ergebnisse beeinflusst haben:
-
-\begin{itemize}
-    \item Hintergrundprozesse liefen parallel zur Messung
-    \item Thermisches Throttling durch unkontrollierte GPU-Temperatur
-    \item Dynamisches Power Management der Laptop-GPU
-    \item Nicht garantiert geleerte CPU- und GPU-Caches zwischen den Runs
-    \item OS-Scheduling-Interrupts, insbesondere bei H$\to$D/D$\to$H Transfers
-\end{itemize}
-
-Die Ergebnisse sind daher als Richtwerte zu verstehen. Um Schwankungen zu minimieren, wurde jede Messung als Durchschnitt
-über 200 Runs ermittelt. Der erste Aufruf (Warm-up Run) wird separat ausgewiesen, da CUDA-Kontext und Page-Cache zu diesem Zeitpunkt noch nicht aufgewärmt sind. NCU-Profiling wurde mit 10 Kernel-Instanzen pro Report durchgeführt, der Warm-up Run ausgeschlossen.
+Die Performance-Messungen wurden unter nicht-isolierten Bedingungen
+durchgeführt: Hintergrundprozesse, thermisches Throttling, dynamisches
+Power Management der Laptop-GPU, nicht garantiert geleerte Caches sowie
+OS-Scheduling-Interrupts bei H$\to$D/D$\to$H-Transfers können die
+Ergebnisse beeinflusst haben. Die Ergebnisse sind daher als Richtwerte
+zu verstehen. Um Schwankungen zu minimieren, wurde jede Messung als
+Durchschnitt über 200 Runs ermittelt, wobei der erste Aufruf (Warm-up
+Run) separat ausgewiesen wird, da CUDA-Kontext und Page-Cache zu diesem
+Zeitpunkt noch nicht aufgewärmt sind. NCU-Profiling wurde mit 10
+Kernel-Instanzen pro Report durchgeführt, der Warm-up Run wurde dabei
+ausgeschlossen.

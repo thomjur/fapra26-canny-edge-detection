@@ -1,0 +1,47 @@
+\subsection{Verwandte Arbeiten}
+\label{subsec:related-work}
+Dieser Abschnitt stellt vier Arbeiten vor, die den Canny-Algorithmus auf
+GPU- bzw. GPU-nahen Architekturen parallelisieren, mit besonderem Fokus
+darauf, welche Speicheroptimierungen die jeweiligen Autoren für die
+Non-Maximum Suppression einsetzen und begründen.
+
+Der in diesem Praktikum implementierte Algorithmus basiert auf dem von
+Canny \cite{canny1986} in \textit{A Computational Approach to Edge
+Detection} vorgeschlagenen mehrstufigen Verfahren zur Kantendetektion,
+bestehend aus Gaussian Blur, Gradientenberechnung, Non-Maximum
+Suppression und Hysteresis Thresholding, dem die eigene Pipeline
+unmittelbar folgt.
+
+Song et al. \cite{song2024} implementieren in \textit{A Parallel Canny
+Edge Detection Algorithm Based on OpenCL Acceleration} eine
+OpenCL-basierte Variante und begründen den Einsatz von Local Memory
+ausschließlich für die Faltungsstufen, da hier pro Pixel $n^2$ Nachbarn
+gelesen werden; für die Non-Maximum Suppression, die nur zwei Nachbarn
+pro Pixel benötigt, fehlt im Pseudocode dagegen jeder Lade- oder
+Kachelungsschritt.
+
+Ogawa et al. \cite{ogawa2010} stellen in \textit{Efficient Canny Edge
+Detection using a GPU} eine frühe CUDA-Implementierung vor, bei der die
+Non-Maximum Suppression ohne Kachelung direkt auf dem Global Memory
+arbeitet. Der eigentliche Schwerpunkt liegt auf einer stack-basierten
+Traversierung der nachgelagerten Hysterese-Stufe, die im Gegensatz zu
+Ansätzen mit fester Traversierungstiefe auch lange, über mehrere
+Bildkacheln verlaufende Kantenketten vollständig erfasst.
+
+Horvath et al. \cite{horvath2023} implementieren in \textit{Canny Edge
+Detection on GPU using CUDA} die Canny-Pipeline mit einem eigenen Kernel
+pro Stufe. Die Shared-Memory-Implementierung der Non-Maximum-Suppression
+orientiert sich am Tiling-Ansatz des Sobel-Kernels, benötigt aufgrund
+der geringeren Nachbarschaftsgröße jedoch nur einen minimalen Halo-Rand.
+Mittels NSIGHT Compute identifizieren die Autoren zudem
+\texttt{hypot}/\texttt{atan2} als Hauptbottleneck ihres Sobel-Kernels;
+deren Ersatz durch konstante Zuweisungen reduzierte die Kernel-Laufzeit
+um den Faktor 8.0.
+
+Yadav und Gupta \cite{yadav2025} vergleichen in \textit{Optimizing CUDA
+Kernels for High-Performance Canny Edge Detection} vier
+Optimierungsstufen anhand einer Roofline-Analyse, die sich jedoch
+ausschließlich auf den Gaussian-Filter-Kernel bezieht. Bemerkenswert
+ist, dass die Autoren die Non-Maximum Suppression konzeptionell nicht
+dem Shared-Memory-Ansatz, sondern der Warp-Level-Optimierung zuordnen,
+ohne diesen Kernel jedoch gesondert zu profilieren.

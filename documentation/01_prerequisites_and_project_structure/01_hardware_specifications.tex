@@ -1,2 +1,31 @@
 \subsection{Hardware-Spezifikationen}
-\label{subsec:hardware-spezifikationen}
+\label{subsec:heardware-spezifikationen}
+
+Die Implementierung wurde auf zwei unterschiedlichen Systemen entwickelt und
+gemessen. Die Hardware-Ausstattung unterscheidet sich dabei deutlich, was den
+späteren Vergleich der Ergebnisse interessant macht.
+
+\subsubsection*{System: Matthias Stefan}
+\begin{center}
+    \small
+    \setlength{\tabcolsep}{6pt}
+    \renewcommand{\arraystretch}{0.9}
+    \begin{tabular}{ll}
+        \toprule
+        Parameter & Wert \\
+        \midrule
+        GPU                              & NVIDIA GeForce RTX~2060 (Laptop) \\
+        Compute Capability               & 7.5 \\
+        Gesamter GPU-Speicher            & \SI{5737}{MB} \\
+        L2-Cache                         & \SI{3072}{KB} \\
+        Streaming Multiprocessors (SM)   & 30 \\
+        Max. Threads pro SM              & 1024 \\
+        Warpgröße                        & 32 \\
+        Memory-Takt                      & \SI{5501}{MHz} \\
+        Memory-Busbreite                 & 192\,bit \\
+        Peak-Speicherbandbreite          & \SI{264}{GB/s} \\
+        GPU-Takt                         & \SI{1350}{MHz} \\
+        \bottomrule
+    \end{tabular}
+    \captionof{table}{GPU-Spezifikationen der RTX~2060 (Matthias Stefan)}
+\end{center}

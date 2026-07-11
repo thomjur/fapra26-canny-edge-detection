@@ -1,2 +1,30 @@
 \subsection{Projektstruktur}
 \label{subsec:projektstruktur}
+
+\begin{center}
+    \begin{minipage}[t]{0.45\textwidth}
+        \small
+        Der Quellcode ist modular nach Pipeline-Stufen organisiert,
+        wobei jede Stufe aus einem \texttt{.cu}/\texttt{.cuh}-Paar
+        besteht, das die jeweiligen \texttt{execute()}- und
+        \texttt{cleanup()}-Funktionen sowie die zugehörigen
+        CUDA-Kernel kapselt. Zum Einlesen und Schreiben der Bilddaten
+        wird die Header-only-Bibliothek \texttt{stb\_image} eingesetzt.
+    \end{minipage}
+    \hfill
+    \begin{minipage}[t]{0.45\textwidth}
+        \small
+        \dirtree{%
+            .1 /.
+            .2 run\_debug.sh.
+            .2 run\_release.sh.
+            .2 src/.
+            .3 common.cuh.
+            .3 gaussian.cu(h).
+            .3 main.cu.
+            .3 nms.cu(h).
+            .3 sobel.cu(h).
+            .3 stb\_image(\_write).h.
+        }
+    \end{minipage}
+\end{center}

@@ -1,3 +1,21 @@
 \subsection{Schritt 3: Non-Maximum Suppression}
 \label{sec:results_non-maximum-suppression}
 
+\subsubsection{Korrektheit}
+
+Abbildung~\ref{fig:nms_result_zoom} zeigt einen Detailausschnitt des
+Ergebnisses der Non-Maximum Suppression im Vergleich zur
+Gradientenmagnitude aus Schritt~\ref{sec:impl_sobel}: Die zuvor
+mehrere Pixel breite Gradientenantwort wird auf eine Breite von einem
+Pixel reduziert, mit Ausnahme lokaler Plateaus (vgl.\
+Abschnitt~\ref{sec:impl_non-maximum-suppression}).
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{98_assets/maple-leaf-black-5120x2880-cmp-sobel-nms_detail.png}
+    \caption{Detailausschnitt: Vergleich Gradientenmagnitude (links) vs.\
+        Non-Maximum Suppression (rechts).}
+    \label{fig:nms_result_zoom}
+\end{figure}
+
+\subsubsection{Performance}
