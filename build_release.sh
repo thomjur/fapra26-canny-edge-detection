@@ -11,6 +11,7 @@
 #   SOBEL_OPT=0     naive         (default)
 #   SOBEL_OPT=1     shared memory
 #   SOBEL_OPT=2     optimized version
+#   SOBEL_OPT=3     optimized version + pinned memory
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory

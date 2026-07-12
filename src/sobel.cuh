@@ -12,8 +12,10 @@
 #define SOBEL_SHARED
 #elif SOBEL_OPT == 2
 #define SOBEL_OPTIMIZED
+#elif SOBEL_OPT == 3
+#define SOBEL_PINNED
 #else
-#error "SOBEL_OPT must be 0 or 1 or 2"
+#error "SOBEL_OPT must be 0 or 1 or 2 or 3"
 #endif
 
 /**

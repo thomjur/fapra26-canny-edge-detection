@@ -55,6 +55,14 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
       static_cast<uint32_t>(
           std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
 #endif
+#ifdef SOBEL_PINNED
+  dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 grid_dim(
+      static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+      static_cast<uint32_t>(
+          std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+#endif
+
   // Calculate buffer sizes
   const size_t img_size = width * height * sizeof(uint8_t);
   const size_t dir_size = width * height * sizeof(float);
@@ -65,8 +73,16 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
   float *device_direction;  // Buffer for gradient direction values
 
   // Allocate host buffers for results
+  // Pinned memory?
+#ifdef SOBEL_PINNED
+  uint8_t *host_gradient = nullptr;
+  float *host_direction = nullptr;
+  CUDA_THROW_IF_FAILED(cudaMallocHost(&host_gradient, img_size));
+  CUDA_THROW_IF_FAILED(cudaMallocHost(&host_direction, dir_size));
+#else
   auto *host_gradient = static_cast<uint8_t *>(malloc(img_size));
   auto *host_direction = static_cast<float *>(malloc(dir_size));
+#endif
 
   // Allocate device memory
   CUDA_THROW_IF_FAILED(cudaMalloc(&device_src, img_size));
@@ -102,6 +118,11 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
       device_src, width, height, device_gradient, device_direction);
 #endif
 #ifdef SOBEL_OPTIMIZED
+  printf("Starting optimized Sobel kernel...\n");
+  optimized_sobel_filter<<<grid_dim, block_dim>>>(
+      device_src, width, height, device_gradient, device_direction);
+#endif
+#ifdef SOBEL_PINNED
   printf("Starting optimized Sobel kernel...\n");
   optimized_sobel_filter<<<grid_dim, block_dim>>>(
       device_src, width, height, device_gradient, device_direction);
@@ -143,8 +164,13 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
  * to free.
  */
 void sobel_cleanup(SobelResult &result) {
+#ifdef SOBEL_PINNED
+  cudaFreeHost(result.host_dir);
+  cudaFreeHost(result.host_grad);
+#else
   free(result.host_dir);
   free(result.host_grad);
+#endif
   result.host_dir = nullptr;
   result.host_grad = nullptr;
 }
