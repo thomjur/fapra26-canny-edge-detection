@@ -125,3 +125,15 @@ Threads zu vermeiden. Magnitude und Nachbarn werden anschließend
 direkt aus der Kachel statt aus dem globalen Speicher gelesen. Die
 quantitative Auswertung findet sich in
 Abschnitt~\ref{sec:results_non-maximum-suppression}.
+
+\subsubsection{Bucket-Optimierung}
+\label{sec:bucket_nms}
+
+Als letzte Optimierungsmöglichkeit verwendet diese Stufe einen vom
+Sobel-Kernel bereits vorquantisierten Richtungs-Bucket $\in \{0,1,2,3\}$
+statt Radiant-Werten, wodurch Gradumrechnung und Klassenbestimmung
+entfallen; die $(dx, dy)$-Offsets kommen stattdessen aus einer
+Lookup-Tabelle im Constant Memory. Die Magnitude bleibt gekachelt, da
+sie mehrfach gelesen wird; der Bucket-Wert dagegen wird direkt aus dem
+globalen Speicher gelesen, da hier keine Datenwiederverwendung
+zwischen Threads stattfindet.
