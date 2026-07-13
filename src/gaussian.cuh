@@ -28,7 +28,7 @@
 
 /// Blur radius for the gaussian filter (e.g. 2 = 5x5 kernel).
 /// Must be a compile-time constant for shared memory tile sizing.
-#define BLUR_RADIUS 9
+#define BLUR_RADIUS 2
 
 /// Holds the blurred image and per-stage timing results from gaussian_execute().
 struct GaussianResult

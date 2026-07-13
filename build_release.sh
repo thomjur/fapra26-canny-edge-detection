@@ -12,6 +12,7 @@
 #   SOBEL_OPT=1     shared memory
 #   SOBEL_OPT=2     optimized version
 #   SOBEL_OPT=3     optimized version + pinned memory
+#   SOBEL_OPT=4     optimized bucket version
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory
@@ -22,9 +23,9 @@
 BIN_DIR="bin"
 BINARY="$BIN_DIR/canny_release.out"
 GAUSSIAN_OPT="${GAUSSIAN_OPT:-2}"
-SOBEL_OPT="${SOBEL_OPT:-1}"
+SOBEL_OPT="${SOBEL_OPT:-3}"
 NMS_OPT="${NMS_OPT:-1}"
-WARMUP="${WARMUP:-1}"
+WARMUP="${WARMUP:-0}"
 ARCH="sm_75"
 
 mkdir -p "$BIN_DIR"

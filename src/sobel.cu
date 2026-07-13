@@ -62,15 +62,34 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
       static_cast<uint32_t>(
           std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
 #endif
+#ifdef SOBEL_BUCKET
+    dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid_dim(
+        static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+        static_cast<uint32_t>(
+            std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+#endif
 
   // Calculate buffer sizes
-  const size_t img_size = width * height * sizeof(uint8_t);
-  const size_t dir_size = width * height * sizeof(float);
+    // Calculate buffer sizes
+    const size_t img_size = width * height * sizeof(uint8_t);
+    // direction buffer: bucket index (uint8_t) instead of radians (float) when
+    // SOBEL_BUCKET is active, since bucket_sobel_filter skips atan2f() entirely
+#ifdef SOBEL_BUCKET
+    const size_t dir_size = width * height * sizeof(uint8_t);
+#else
+    const size_t dir_size = width * height * sizeof(float);
+#endif
 
   // Allocate device buffers
-  uint8_t *device_src;      // Buffer for input image
-  uint8_t *device_gradient; // Buffer for gradient magnitude image
-  float *device_direction;  // Buffer for gradient direction values
+    uint8_t *device_src;      // Buffer for input image
+    uint8_t *device_gradient; // Buffer for gradient magnitude image
+#ifdef SOBEL_BUCKET
+    uint8_t *device_direction; // Buffer for gradient direction buckets (0-3)
+#else
+    float *device_direction;  // Buffer for gradient direction values (radians)
+#endif
+
 
   // Allocate host buffers for results
   // Pinned memory?
@@ -79,6 +98,9 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
   float *host_direction = nullptr;
   CUDA_THROW_IF_FAILED(cudaMallocHost(&host_gradient, img_size));
   CUDA_THROW_IF_FAILED(cudaMallocHost(&host_direction, dir_size));
+#elif defined(SOBEL_BUCKET)
+  auto *host_gradient = static_cast<uint8_t *>(malloc(img_size));
+  auto *host_direction = static_cast<uint8_t *>(malloc(dir_size));
 #else
   auto *host_gradient = static_cast<uint8_t *>(malloc(img_size));
   auto *host_direction = static_cast<float *>(malloc(dir_size));
@@ -108,24 +130,24 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
 
   // Launch Sobel kernel
 #ifdef SOBEL_NAIVE
-  printf("Starting naive Sobel kernel...\n");
   naive_sobel_filter<<<grid_dim, block_dim>>>(
       device_src, width, height, device_gradient, device_direction);
 #endif
 #ifdef SOBEL_SHARED
-  printf("Starting shared memory Sobel kernel...\n");
   sharedm_sobel_filter<<<grid_dim, block_dim>>>(
       device_src, width, height, device_gradient, device_direction);
 #endif
 #ifdef SOBEL_OPTIMIZED
-  printf("Starting optimized Sobel kernel...\n");
   optimized_sobel_filter<<<grid_dim, block_dim>>>(
       device_src, width, height, device_gradient, device_direction);
 #endif
 #ifdef SOBEL_PINNED
-  printf("Starting optimized Sobel kernel...\n");
   optimized_sobel_filter<<<grid_dim, block_dim>>>(
       device_src, width, height, device_gradient, device_direction);
+#endif
+#ifdef SOBEL_BUCKET
+    bucket_sobel_filter<<<grid_dim, block_dim>>>(
+        device_src, width, height, device_gradient, device_direction);
 #endif
   cudaEventRecord(t2);
 
@@ -140,7 +162,13 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
   // --- Collect timing results ---
   SobelResult result{};
   result.host_grad = host_gradient;
-  result.host_dir = host_direction;
+#ifdef SOBEL_BUCKET
+    result.host_dir_bucket = host_direction;
+    result.host_dir = nullptr;
+#else
+    result.host_dir = host_direction;
+    result.host_dir_bucket = nullptr;
+#endif
   cudaEventElapsedTime(&result.ms_h2d, t0, t1);
   cudaEventElapsedTime(&result.ms_kernel, t1, t2);
   cudaEventElapsedTime(&result.ms_d2h, t2, t3);
@@ -167,6 +195,9 @@ void sobel_cleanup(SobelResult &result) {
 #ifdef SOBEL_PINNED
   cudaFreeHost(result.host_dir);
   cudaFreeHost(result.host_grad);
+#elif defined(SOBEL_BUCKET)
+    free(result.host_dir_bucket);
+    free(result.host_grad);
 #else
   free(result.host_dir);
   free(result.host_grad);
@@ -399,4 +430,55 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
   // Calculate and write the gradient direction (in radians) using atan2
   out_dir_buffer[y * width + x] =
       atan2f(static_cast<float>(gy), static_cast<float>(gx));
+}
+
+/**
+ * @brief Sobel kernel, builds on optimized_sobel_filter but drops atan2f().
+ * Direction bucket is derived from gx/gy sign and |gy|/|gx| slope thresholds
+ * instead of computing the actual angle.
+ *
+ * @param src_buffer Input image (device, grayscale, 8-bit).
+ * @param width Image width in pixels.
+ * @param height Image height in pixels.
+ * @param out_grad_buffer Output gradient magnitude (device, 8-bit).
+ * @param out_dir_buffer Output direction bucket (device, 0-3 = 0/45/90/135°).
+ */
+__global__ void bucket_sobel_filter(const uint8_t *src_buffer,
+                                    const int32_t width, const int32_t height,
+                                    uint8_t *out_grad_buffer,
+                                    uint8_t *out_dir_buffer) {
+    int32_t x = blockIdx.x * blockDim.x + threadIdx.x;
+    int32_t y = blockIdx.y * blockDim.y + threadIdx.y;
+    if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1)
+        return;
+
+    const uint8_t *r0 = src_buffer + (y - 1) * width + (x - 1);
+    const uint8_t *r1 = r0 + width;
+    const uint8_t *r2 = r1 + width;
+    int p00 = r0[0], p01 = r0[1], p02 = r0[2];
+    int p10 = r1[0], p12 = r1[2];
+    int p20 = r2[0], p21 = r2[1], p22 = r2[2];
+
+    int gx = -p00 + p02 - (p10 << 1) + (p12 << 1) - p20 + p22;
+    int gy = -p00 - (p01 << 1) - p02 + p20 + (p21 << 1) + p22;
+
+    float gradient = fabsf(static_cast<float>(gx)) + fabsf(static_cast<float>(gy));
+    out_grad_buffer[y * width + x] = static_cast<uint8_t>(fminf(255.0f, gradient));
+
+    const float abs_gx = fabsf(static_cast<float>(gx));
+    const float abs_gy = fabsf(static_cast<float>(gy));
+    constexpr float TAN_22_5 = 0.414213562f;
+    constexpr float TAN_67_5 = 2.414213562f;
+
+    uint8_t bucket;
+    if (abs_gy < TAN_22_5 * abs_gx)
+        bucket = 0; // 0°
+    else if (abs_gy > TAN_67_5 * abs_gx)
+        bucket = 2; // 90°
+    else if ((gx > 0) == (gy > 0))
+        bucket = 1; // 45°
+    else
+        bucket = 3; // 135°
+
+    out_dir_buffer[y * width + x] = bucket;
 }

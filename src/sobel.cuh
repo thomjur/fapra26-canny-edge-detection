@@ -14,6 +14,8 @@
 #define SOBEL_OPTIMIZED
 #elif SOBEL_OPT == 3
 #define SOBEL_PINNED
+#elif SOBEL_OPT == 4
+#define SOBEL_BUCKET
 #else
 #error "SOBEL_OPT must be 0 or 1 or 2 or 3"
 #endif
@@ -72,6 +74,23 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
                                        const int32_t height,
                                        uint8_t *out_grad_buffer,
                                        float *out_dir_buffer);
+
+/**
+ * @brief Sobel kernel, builds on SOBEL_OPTIMIZED but skips atan2f() by
+ * bucketing the direction directly from gx/gy via sign and slope checks.
+ *
+ * @param src_buffer Input image (device, grayscale, 8-bit).
+ * @param width Image width in pixels.
+ * @param height Image height in pixels.
+ * @param out_grad_buffer Output gradient magnitude (device, 8-bit).
+ * @param out_dir_buffer Output direction bucket (device, 0-3 = 0/45/90/135°).
+ */
+__global__ void bucket_sobel_filter(const uint8_t *src_buffer,
+                                    const int32_t width,
+                                    const int32_t height,
+                                    uint8_t *out_grad_buffer,
+                                    uint8_t *out_dir_buffer);
+
 /**
  * @struct SobelResult
  * @brief Holds the gradient and direction images from sobel_execute().
@@ -82,6 +101,7 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
 struct SobelResult {
   uint8_t *host_grad; ///< Grayscale image with gradient values (0-255).
   float *host_dir; ///< Image with gradient direction values in radians (atan2).
+  uint8_t *host_dir_bucket;  ///< Gradient direction bucket (0-3). Valid only if SOBEL_BUCKET is active.
   float ms_h2d;    ///< Time taken for host-to-device transfer in milliseconds.
   float ms_kernel; ///< Time taken for kernel execution in milliseconds.
   float ms_d2h;    ///< Time taken for device-to-host transfer in milliseconds.
