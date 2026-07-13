@@ -9,9 +9,13 @@
 #if SOBEL_OPT == 0
 #define SOBEL_NAIVE
 #elif SOBEL_OPT == 1
+#define SOBEL_SHARED
+#elif SOBEL_OPT == 2
 #define SOBEL_OPTIMIZED
+#elif SOBEL_OPT == 3
+#define SOBEL_PINNED
 #else
-#error "SOBEL_OPT must be 0 or 1"
+#error "SOBEL_OPT must be 0 or 1 or 2 or 3"
 #endif
 
 /**
@@ -32,6 +36,28 @@ __global__ void naive_sobel_filter(const uint8_t *src_buffer,
 
 /**
  * @brief Optimized CUDA kernel for Sobel edge detection.
+ *
+ * @param src_buffer Input image buffer (device memory, grayscale, 8-bit).
+ * @param width Width of the input image in pixels.
+ * @param height Height of the input image in pixels.
+ * @param out_grad_buffer Output buffer for gradient magnitudes (device memory,
+ * 8-bit).
+ * @param out_dir_buffer Output buffer for gradient directions (device memory,
+ * float).
+ */
+__global__ void sharedm_sobel_filter(const uint8_t *src_buffer,
+                                     const int32_t width, const int32_t height,
+                                     uint8_t *out_grad_buffer,
+                                     float *out_dir_buffer);
+/**
+ * @brief Optimized CUDA kernel for Sobel edge detection. Since the shared
+ * memory version did not improve the runtime, this version uses other
+ * optimizations.
+ *
+ * We use two main optimization:
+ *
+ * 1. We use a simpler version to calculate the gradient value.
+ * 2. We unroll the Sobel kernel loop
  *
  * @param src_buffer Input image buffer (device memory, grayscale, 8-bit).
  * @param width Width of the input image in pixels.

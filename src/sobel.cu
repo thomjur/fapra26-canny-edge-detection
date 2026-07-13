@@ -33,11 +33,35 @@
 SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
                           int32_t height) {
   // Define block and grid dimensions for the CUDA kernel
+  // in optimized version, we use a 32x8 Block, in naive version 16x16
+#ifdef SOBEL_NAIVE
   dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
   dim3 grid_dim(
       static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
       static_cast<uint32_t>(
           std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+#endif
+#ifdef SOBEL_SHARED
+  dim3 block_dim(BLOCK_SIZE_X, BLOCK_SIZE_Y);
+  dim3 grid_dim(static_cast<uint32_t>(
+                    std::ceil(static_cast<float>(width) / BLOCK_SIZE_X)),
+                static_cast<uint32_t>(
+                    std::ceil(static_cast<float>(height) / BLOCK_SIZE_Y)));
+#endif
+#ifdef SOBEL_OPTIMIZED
+  dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 grid_dim(
+      static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+      static_cast<uint32_t>(
+          std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+#endif
+#ifdef SOBEL_PINNED
+  dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 grid_dim(
+      static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+      static_cast<uint32_t>(
+          std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+#endif
 
   // Calculate buffer sizes
   const size_t img_size = width * height * sizeof(uint8_t);
@@ -49,8 +73,16 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
   float *device_direction;  // Buffer for gradient direction values
 
   // Allocate host buffers for results
+  // Pinned memory?
+#ifdef SOBEL_PINNED
+  uint8_t *host_gradient = nullptr;
+  float *host_direction = nullptr;
+  CUDA_THROW_IF_FAILED(cudaMallocHost(&host_gradient, img_size));
+  CUDA_THROW_IF_FAILED(cudaMallocHost(&host_direction, dir_size));
+#else
   auto *host_gradient = static_cast<uint8_t *>(malloc(img_size));
   auto *host_direction = static_cast<float *>(malloc(dir_size));
+#endif
 
   // Allocate device memory
   CUDA_THROW_IF_FAILED(cudaMalloc(&device_src, img_size));
@@ -80,7 +112,17 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
   naive_sobel_filter<<<grid_dim, block_dim>>>(
       device_src, width, height, device_gradient, device_direction);
 #endif
+#ifdef SOBEL_SHARED
+  printf("Starting shared memory Sobel kernel...\n");
+  sharedm_sobel_filter<<<grid_dim, block_dim>>>(
+      device_src, width, height, device_gradient, device_direction);
+#endif
 #ifdef SOBEL_OPTIMIZED
+  printf("Starting optimized Sobel kernel...\n");
+  optimized_sobel_filter<<<grid_dim, block_dim>>>(
+      device_src, width, height, device_gradient, device_direction);
+#endif
+#ifdef SOBEL_PINNED
   printf("Starting optimized Sobel kernel...\n");
   optimized_sobel_filter<<<grid_dim, block_dim>>>(
       device_src, width, height, device_gradient, device_direction);
@@ -122,8 +164,13 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width,
  * to free.
  */
 void sobel_cleanup(SobelResult &result) {
+#ifdef SOBEL_PINNED
+  cudaFreeHost(result.host_dir);
+  cudaFreeHost(result.host_grad);
+#else
   free(result.host_dir);
   free(result.host_grad);
+#endif
   result.host_dir = nullptr;
   result.host_grad = nullptr;
 }
@@ -199,7 +246,7 @@ __global__ void naive_sobel_filter(const uint8_t *src_buffer,
  * 1) Implemented shared memory to avoid loading neighboring pixels from global
  * memory in each thread.
  * 2) Implemented a more simple version of the gradient
- * calculation (TODO).
+ * calculation.
  *
  * @param src_buffer Input image buffer (device memory, grayscale, 8-bit).
  * @param width Width of the input image in pixels.
@@ -210,18 +257,15 @@ __global__ void naive_sobel_filter(const uint8_t *src_buffer,
  * float).
  */
 
-__global__ void optimized_sobel_filter(const uint8_t *src_buffer,
-                                       const int32_t width,
-                                       const int32_t height,
-                                       uint8_t *out_grad_buffer,
-                                       float *out_dir_buffer) {
+__global__ void sharedm_sobel_filter(const uint8_t *src_buffer,
+                                     const int32_t width, const int32_t height,
+                                     uint8_t *out_grad_buffer,
+                                     float *out_dir_buffer) {
   // We use shared memory in this case
   // We must also allocate memory for the halo pixels
   // global pixel position in the image
   const int32_t x = static_cast<int32_t>(blockIdx.x * blockDim.x + threadIdx.x);
   const int32_t y = static_cast<int32_t>(blockIdx.y * blockDim.y + threadIdx.y);
-  if (x >= width || y >= height)
-    return;
 
   // local thread position within the block (0..BLOCK_SIZE-1)
   // used to index into the shared memory tile
@@ -229,21 +273,23 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
   const int32_t ty = static_cast<int32_t>(threadIdx.y);
 
   // shared memory tile including halo border of 1
-  constexpr int32_t tile_size = BLOCK_SIZE + 2;
-  __shared__ uint8_t shared_memory[tile_size * tile_size];
+  const uint8_t SOBEL_RADIUS = 1;
+  constexpr int32_t tile_size_x = BLOCK_SIZE_X + 2 * SOBEL_RADIUS;
+  constexpr int32_t tile_size_y = BLOCK_SIZE_Y + 2 * SOBEL_RADIUS;
+  __shared__ uint8_t shared_memory[tile_size_x * tile_size_y];
 
   // load tile into shared memory (including halo)
   // each thread loads one or more pixels depending on tile size vs block size
-  for (int32_t j = ty; j < tile_size; j += BLOCK_SIZE) {
-    for (int32_t i = tx; i < tile_size; i += BLOCK_SIZE) {
+  for (int32_t j = ty; j < tile_size_y; j += BLOCK_SIZE_Y) {
+    for (int32_t i = tx; i < tile_size_x; i += BLOCK_SIZE_X) {
       // map tile position back to image coordinates (subtract halo offset)
       const int32_t img_x =
-          static_cast<int32_t>(blockIdx.x * BLOCK_SIZE) + i - 1;
+          static_cast<int32_t>(blockIdx.x * BLOCK_SIZE_X) + i - SOBEL_RADIUS;
       const int32_t img_y =
-          static_cast<int32_t>(blockIdx.y * BLOCK_SIZE) + j - 1;
+          static_cast<int32_t>(blockIdx.y * BLOCK_SIZE_Y) + j - SOBEL_RADIUS;
 
       // zero-padding for pixels outside image bounds
-      shared_memory[j * tile_size + i] =
+      shared_memory[j * tile_size_x + i] =
           (img_x >= 0 && img_x < width && img_y >= 0 && img_y < height)
               ? src_buffer[img_y * width + img_x]
               : 0;
@@ -253,6 +299,9 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
   // wait until every thread has finished loading before any thread starts
   // reading
   __syncthreads();
+
+  if (x >= width || y >= height)
+    return;
 
   // Check if the thread is within the image boundaries
   // and if the 3x3 kernel fits around the pixel
@@ -266,17 +315,15 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
     // Apply the Sobel kernels: convolve the 3x3 neighborhood with Gx and Gy
     for (int8_t i = -1; i <= 1; i++) {
       for (int8_t j = -1; j <= 1; j++) {
-        uint8_t pixel = shared_memory[(threadIdx.y + 1 + i) * tile_size +
+        uint8_t pixel = shared_memory[(threadIdx.y + 1 + i) * tile_size_x +
                                       (threadIdx.x + 1 + j)];
         gx += pixel * sobelX[i + 1][j + 1];
         gy += pixel * sobelY[i + 1][j + 1];
       }
     }
 
-    //// 2. Optimization: Instead of using sqrtf, we use the optimized formel
-    /// for / gradient calculations in XXX
-    // Calculate the gradient magnitude: |Gx| + |Gy|
-    float gradient = abs(gx) + abs(gy);
+    // Calculate the gradient magnitude: sqrt(Gx^2 + Gy^2)
+    float gradient = sqrtf(gx * gx + gy * gy);
 
     // Clamp the gradient magnitude to the valid 8-bit range [0, 255]
     gradient = fminf(255.0f, fmaxf(0.0f, gradient));
@@ -285,7 +332,71 @@ __global__ void optimized_sobel_filter(const uint8_t *src_buffer,
     out_grad_buffer[y * width + x] = static_cast<uint8_t>(gradient);
 
     // Calculate and write the gradient direction (in radians) using atan2
+    // We round the grad dir to the four directions 0°, 45°, 90°, 135°, 180°
     out_dir_buffer[y * width + x] =
         atan2f(static_cast<float>(gy), static_cast<float>(gx));
   }
+}
+
+/**
+ * @brief Optimized CUDA kernel for Sobel edge detection. Since the shared
+ * memory version did not improve the runtime, this version uses other
+ * optimizations.
+ *
+ * We use two main optimization:
+ *
+ * 1. We use a simpler version to calculate the gradient value.
+ * 2. We unroll the Sobel kernel loop
+ *
+ * @param src_buffer Input image buffer (device memory, grayscale, 8-bit).
+ * @param width Width of the input image in pixels.
+ * @param height Height of the input image in pixels.
+ * @param out_grad_buffer Output buffer for gradient magnitudes (device memory,
+ * 8-bit).
+ * @param out_dir_buffer Output buffer for gradient directions (device memory,
+ * float).
+ */
+__global__ void optimized_sobel_filter(const uint8_t *src_buffer,
+                                       const int32_t width,
+                                       const int32_t height,
+                                       uint8_t *out_grad_buffer,
+                                       float *out_dir_buffer) {
+  // Calculate pixel coordinates for this thread
+  int32_t x = blockIdx.x * blockDim.x + threadIdx.x;
+  int32_t y = blockIdx.y * blockDim.y + threadIdx.y;
+
+  // OPTIMIZATION 1: We unroll the former Sobel Kernel Arrays
+  if (x <= 0 || x >= width - 1 || y <= 0 || y >= height - 1)
+    return;
+
+  // First, we define the starting positions of the three rows that we need
+  // (e.g., r0 is the upper left pixel of the current pixel in the center)
+  const uint8_t *r0 = src_buffer + (y - 1) * width + (x - 1);
+  const uint8_t *r1 = r0 + width;
+  const uint8_t *r2 = r1 + width;
+
+  // Next, we get all neighboring pixels of p11 (which is our current pixel)
+  // Since we are using pointers, we can just index the next positions
+  int p00 = r0[0], p01 = r0[1], p02 = r0[2];
+  int p10 = r1[0], p12 = r1[2];
+  int p20 = r2[0], p21 = r2[1], p22 = r2[2];
+
+  // Finally, we directly calculate the values of gx and gy instead of iterating
+  // over an array; We also use bit shifts instead of multiplication operators
+  int gx = -p00 + p02 - (p10 << 1) + (p12 << 1) - p20 + p22;
+  int gy = -p00 - (p01 << 1) - p02 + p20 + (p21 << 1) + p22;
+
+  // OPTIMIZATION 2: We are using a simplified version to calculate the gradient
+  // magnitude: abs(Gx) + abs(Gy)
+  float gradient = abs(gx) + abs(gy);
+
+  // Clamp the gradient magnitude to the valid 8-bit range [0, 255]
+  gradient = fminf(255.0f, fmaxf(0.0f, gradient));
+
+  // Write the gradient magnitude to the output buffer
+  out_grad_buffer[y * width + x] = static_cast<uint8_t>(gradient);
+
+  // Calculate and write the gradient direction (in radians) using atan2
+  out_dir_buffer[y * width + x] =
+      atan2f(static_cast<float>(gy), static_cast<float>(gx));
 }

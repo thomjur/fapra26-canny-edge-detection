@@ -15,3 +15,7 @@
 
 /// Block size for all CUDA kernels (16x16 = 256 threads per block).
 #define BLOCK_SIZE 16
+/// We use a special block size for sobel filter to make use of coalescened
+/// memory
+#define BLOCK_SIZE_X 32
+#define BLOCK_SIZE_Y 8
