@@ -1,37 +1,28 @@
 \subsubsection{Schritt 3: Non-Maximum Suppression}
 
 Schritt~2 liefert für jeden Pixel einen Gradientenbetrag, der die lokale
-Kantenstärke beschreibt, die resultierenden Kanten sind dabei an vielen
-Stellen breiter als ein Pixel. Canny fordert jedoch präzise Lokalisierung:
-\textit{,,The points marked as edge points by the operator should be as close
-as possible to the center of the true edge``} \cite[S.~680]{canny1986}.
-Non-Maximum Suppression reduziert diese breite Gradientenantwort auf eine
-Breite von einem Pixel, indem entlang der Gradientenrichtung nur das lokale
-Maximum erhalten bleibt.
+Kantenstärke beschreibt, wobei die resultierenden Kanten an vielen
+Stellen breiter als ein Pixel sind. Non-Maximum Suppression soll diese
+breite Gradientenantwort im Idealfall auf eine Breite von einem Pixel
+reduzieren, indem entlang der Gradientenrichtung nur das lokale Maximum
+erhalten bleibt. Canny begründet diese Forderung mit dem Kriterium
+präziser Lokalisierung: \textit{,,The points marked as edge points by
+the operator should be as close as possible to the center of the true
+edge``} \cite[S.~680]{canny1986}. Formal entspricht der gesuchte
+Kantenpunkt einer Nullstelle der zweiten Richtungsableitung des
+geglätteten Bildes entlang der Gradientenrichtung $n$
+\cite[S.~691]{canny1986}, die aus der geglätteten Gradientenrichtung
+geschätzt wird, da sie nicht vorab bekannt ist.
 
-Formal lässt sich der gesuchte Kantenpunkt als Nullstelle der zweiten
-Richtungsableitung des geglätteten Bildes beschreiben:
-
-\begin{equation}
-    \label{eq:nms_condition}
-    \frac{\partial^2}{\partial n^2} (G * I) = 0
-\end{equation}
-
-wobei $n$ die Richtung des Gradienten bezeichnet und $G * I$ das geglättete
-Bild \cite[S.~691]{canny1986}. Die Nullstelle der zweiten Ableitung markiert
-exakt den Punkt, an dem die erste Ableitung, die Gradientenstärke entlang
-$n$, ihr lokales Maximum besitzt. Da die Kantenrichtung $n$ nicht vorab
-bekannt ist, wird sie aus der geglätteten Gradientenrichtung geschätzt
-\cite[Gl.~46, S.~691]{canny1986}:
-
-\begin{equation}
-    \label{eq:edge_direction}
-    n = \frac{\nabla(G * I)}{|\nabla(G * I)|}
-\end{equation}
-
-In der diskreten Implementierung wird Gleichung~\ref{eq:nms_condition}
-approximiert, indem die Gradientenmagnitude $|\nabla(G * I)|$ jedes Pixels
-mit den beiden direkten Nachbarn entlang der auf vier Klassen
-($0^\circ$/$45^\circ$/$90^\circ$/$135^\circ$) quantisierten Gradientenrichtung verglichen wird. Ein
-Pixel überlebt die Suppression genau dann, wenn seine Magnitude größer oder
-gleich beiden Nachbarn ist, andernfalls wird er auf null gesetzt.
+In der diskreten Implementierung wird dies approximiert, indem die
+Gradientenmagnitude jedes Pixels mit den beiden direkten Nachbarn
+entlang der auf vier Klassen ($0^\circ$/$45^\circ$/$90^\circ$/$135^\circ$)
+quantisierten Gradientenrichtung verglichen wird. Ein Pixel überlebt
+die Suppression genau dann, wenn seine Magnitude größer oder gleich
+beiden Nachbarn ist, andernfalls wird er auf null gesetzt. Die
+Ein-Pixel-Breite wird dabei nur bei einem strikten lokalen Maximum
+tatsächlich erreicht, denn bei einem Plateau, also mehreren
+benachbarten Pixeln mit identischer Magnitude, erfüllen aufgrund des
+$\geq$-Vergleichs alle beteiligten Pixel gleichzeitig das
+Überlebenskriterium, wodurch die Kante an dieser Stelle breiter als ein
+Pixel bleibt.

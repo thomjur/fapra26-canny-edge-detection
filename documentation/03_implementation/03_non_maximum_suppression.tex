@@ -1,29 +1,28 @@
 \subsection{Schritt 3: Non-Maximum Suppression}
 \label{sec:impl_non-maximum-suppression}
 
+\subsubsection{Naive Implementierung}
+
 Die Non-Maximum Suppression wird im CUDA-Kernel
-\texttt{non\_maximum\_suppression()} umgesetzt. Jeder Thread ist dabei für
-genau einen Pixel zuständig, die Thread-Position ergibt sich wie in
-Schritt~1 und~2 aus \texttt{blockIdx} und \texttt{threadIdx}. Als Input
-erhält der Kernel den Gradientenbetrag (\texttt{magnitude\_buffer}) sowie
-die Gradientenrichtung in Radiant (\texttt{direction\_buffer}) aus
-Schritt~2.
+\texttt{non\_maximum\_suppression()} umgesetzt, wobei jeder Thread für
+genau einen Pixel zuständig ist. Als Input erhält der Kernel den
+Gradientenbetrag (\texttt{magnitude\_buffer}) sowie die
+Gradientenrichtung in Radiant (\texttt{direction\_buffer}) aus
+Schritt~\ref{sec:impl_sobel}.
 
-Zunächst wird die Gradientenrichtung von Radiant in Grad umgerechnet und
-auf den Bereich $[0^\circ, 180^\circ)$ gefaltet, da eine Kante keine
-Orientierung besitzt, eine Kante bei $170^\circ$ und eine bei $-10^\circ$
-beschreiben dieselbe Achse. Anschließend wird die Richtung auf eine von
-vier Klassen quantisiert, die den vier möglichen Achsen im diskreten
-Pixelraster entsprechen (siehe Abbildung~\ref{fig:nms_directions}).
-
+Die Gradientenrichtung wird zunächst von Radiant in Grad umgerechnet
+und auf den Bereich $[0^\circ, 180^\circ)$ gefaltet, da eine Kante
+keine Orientierung besitzt und z.\,B.\ $170^\circ$ und $-10^\circ$
+dieselbe Achse beschreiben. Anschließend wird die Richtung auf eine
+von vier Klassen quantisiert, die den vier möglichen Achsen im
+diskreten Pixelraster entsprechen (Abbildung~\ref{fig:nms_directions}).
 Je nach Richtungsklasse werden die Offsets $(dx, dy)$ zum Nachbarpixel
-bestimmt (Listing~\ref{lst:nms_kernel}, Zeile~18--22). Der Pixel überlebt
-die Suppression genau dann, wenn seine Magnitude größer oder gleich beiden
-Nachbarn entlang dieser Achse ist (Zeile~24--26), andernfalls wird er auf
-null gesetzt:
+bestimmt; der Pixel überlebt die Suppression genau dann, wenn seine
+Magnitude größer oder gleich beiden Nachbarn entlang dieser Achse ist,
+andernfalls wird er auf null gesetzt (Listing~\ref{lst:nms_kernel}).
 
 \begin{lstlisting}[style=cuda, basicstyle=\ttfamily\scriptsize,
-    caption={non\_maximum\_suppression Kernel},
+    caption={non\_maximum\_suppression Kernel (gekürzt)},
     label={lst:nms_kernel}, numbers=left]
 __global__ void non_maximum_suppression(
     const uint8_t* magnitude_buffer,
@@ -32,17 +31,16 @@ __global__ void non_maximum_suppression(
     const int32_t height,
     uint8_t* out_nms_buffer)
 {
-    const auto x = static_cast<int32_t>(blockIdx.x * blockDim.x + threadIdx.x);
-    const auto y = static_cast<int32_t>(blockIdx.y * blockDim.y + threadIdx.y);
-    if (x >= width || y >= height)
-        return;
+    // Thread-Position bestimmen, out-of-bounds Threads verwerfen
+    ...
 
     const uint8_t magnitude = magnitude_buffer[y * width + x];
     const float direction = direction_buffer[y * width + x];
 
-    float deg = direction * (180.0f / CUDART_PI_F);
-    deg = fmodf(deg + 180.0f, 180.0f);
+    // Richtung von Radiant in Grad umrechnen und auf [0, 180) falten
+    ...
 
+    // Richtung auf eine von vier Klassen quantisieren, Offset (dx, dy) bestimmen
     int32_t dx, dy;
     if (deg < 22.5f)       { dx = 1; dy =  0; }
     else if (deg < 67.5f)  { dx = 1; dy = -1; }
@@ -63,6 +61,8 @@ __global__ void non_maximum_suppression(
 \begin{figure}[H]
     \centering
     \begin{tikzpicture}[
+        scale=0.75,
+        every node/.style={transform shape},
         pixel/.style={rectangle, draw, minimum size=1.1cm, align=center,
         font=\small, inner sep=2pt, fill=gray!15},
         center/.style={rectangle, draw, minimum size=1.1cm, align=center,
@@ -82,9 +82,6 @@ __global__ void non_maximum_suppression(
         \node[font=\small] at (1.3,-3.9) {Richtung};
         \node[font=\tiny, text=gray] at (1.3,-4.3) {(beliebiger Winkel)};
 
-        %% Pfeil
-        \draw[->, thick] (3.4,-1.3) -- (4.2,-1.3);
-
         %% Panel 2: 4 Richtungen
         \coordinate (O) at (6.0,-1.3);
         \draw[->, very thick, black]         (O) -- ++(1.2, 0)       node[right, font=\small] {$0^\circ$};
@@ -93,9 +90,6 @@ __global__ void non_maximum_suppression(
         \draw[->, very thick, black]         (O) -- ++(-0.85,-0.85)  node[left,  font=\small] {$135^\circ$};
         \node[font=\small, align=center] at (6.0,-3.9) {eine von vier\\Richtungen};
 
-        %% Pfeil
-        \draw[->, thick] (8.0,-1.3) -- (8.8,-1.3);
-
         %% Panel 3: Vergleich
         \foreach \col in {0,1,2} {
             \foreach \row in {0,1,2} {
@@ -103,8 +97,8 @@ __global__ void non_maximum_suppression(
             }
         }
         \node[center]   at (9.2+1.3, -1.3) {};
-        \node[n_violet] at (9.2+2.6, -2.6) {};   % SE
-        \node[n_violet] at (9.2+0,    0)   {};   % NW
+        \node[n_violet] at (9.2+2.6, -2.6) {};
+        \node[n_violet] at (9.2+0,    0)   {};
         \node[font=\small] at (9.2+1.3,-3.9) {Vergleich};
 
     \end{tikzpicture}
@@ -115,16 +109,19 @@ __global__ void non_maximum_suppression(
     \label{fig:nms_directions}
 \end{figure}
 
-Das Ergebnis der Non-Maximum Suppression ist in
-Abbildung~\ref{fig:nms_result} dargestellt. Im Vergleich zur
-Gradientenmagnitude aus Schritt~2 sind die Kanten auf eine Breite von
-einem Pixel reduziert.
+\subsubsection{Shared Memory Optimierung}
+\label{sec:shared_memory_nms}
 
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=0.7\textwidth]{98_assets/maple-leaf-black-5120x2880-cmp-original-gaussian.jpg}
-    \caption{Vergleich Gradientenmagnitude (links) vs.\ Non-Maximum
-    Suppression (rechts), die breite Gradientenantwort wird auf
-    eine Breite von einem Pixel reduziert. (Placeholder -- wird ersetzt)}
-    \label{fig:nms_result}
-\end{figure}
+Die Shared-Memory-Variante lädt zunächst kooperativ eine Bildkachel
+inklusive eines Halo-Rands der Breite~1 in den On-Chip Speicher, statt
+für jeden Nachbarn einen eigenen Zugriff auf den globalen Speicher
+auszuführen. Der Halo-Rand fällt dabei deutlich schmaler aus als bei
+Gaussian Blur (Abschnitt~\ref{sec:shared_memory_gaussian}), da
+Non-Maximum Suppression stets nur die unmittelbare 8er-Nachbarschaft
+benötigt. Da alle Threads eines Blocks am kollektiven Laden beteiligt
+sein müssen, erfolgt die Grenzprüfung erst nach
+\texttt{\_\_syncthreads()}, um einen Deadlock durch nicht erreichte
+Threads zu vermeiden. Magnitude und Nachbarn werden anschließend
+direkt aus der Kachel statt aus dem globalen Speicher gelesen. Die
+quantitative Auswertung findet sich in
+Abschnitt~\ref{sec:results_non-maximum-suppression}.
