@@ -1,0 +1,61 @@
+MStefan
+
+SOBEL_NAIVE
+--- Sobel Filter (warm-up run) ---
+H->D:   1.835 ms
+Kernel: 0.717 ms
+D->H:   32.075 ms
+Total:  34.626 ms
+--- Sobel Filter (200 runs avg) ---
+H->D:   1.601 ms
+Kernel: 0.567 ms
+D->H:   27.348 ms
+Total:  29.516 ms
+
+SOBEL_SHARED
+--- Sobel Filter (warm-up run) ---
+H->D:   3.372 ms
+Kernel: 1.062 ms
+D->H:   30.810 ms
+Total:  35.244 ms
+--- Sobel Filter (200 runs avg) ---
+H->D:   1.715 ms
+Kernel: 1.000 ms
+D->H:   27.210 ms
+Total:  29.925 ms
+
+SOBEL_OPTIMIZED
+--- Sobel Filter (warm-up run) ---
+H->D:   3.030 ms
+Kernel: 0.636 ms
+D->H:   7.353 ms
+Total:  11.019 ms
+--- Sobel Filter (200 runs avg) ---
+H->D:   1.648 ms
+Kernel: 0.566 ms
+D->H:   7.651 ms
+Total:  9.865 ms
+
+SOBEL_PINNED
+--- Sobel Filter (warm-up run) ---
+H->D:   1.293 ms
+Kernel: 0.539 ms
+D->H:   7.794 ms
+Total:  9.626 ms
+--- Sobel Filter (200 runs avg) ---
+H->D:   1.596 ms
+Kernel: 0.569 ms
+D->H:   7.592 ms
+Total:  9.757 ms
+
+SOBEL_BUCKET
+--- Sobel Filter (warm-up run) ---
+H->D:   1.400 ms
+Kernel: 0.466 ms
+D->H:   11.478 ms
+Total:  13.344 ms
+--- Sobel Filter (200 runs avg) ---
+H->D:   1.926 ms
+Kernel: 0.453 ms
+D->H:   3.720 ms
+Total:  6.099 ms
