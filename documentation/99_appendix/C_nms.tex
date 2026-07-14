@@ -1,0 +1,73 @@
+MStefan
+
+SOBEL_OPTIMIZED NMS_NAIVE
+--- Non-Maximum Suppression (warm-up run) ---
+H->D:   10.035 ms
+Kernel: 0.603 ms
+D->H:   6.540 ms
+Total:  17.178 ms
+--- Non-Maximum Suppression (200 runs avg) ---
+H->D:   9.865 ms
+Kernel: 0.633 ms
+D->H:   1.925 ms
+Total:  12.423 ms
+
+SOBEL_OPTIMIZED NMS_SHARED
+--- Non-Maximum Suppression (warm-up run) ---
+H->D:   14.527 ms
+Kernel: 1.089 ms
+D->H:   7.319 ms
+Total:  22.935 ms
+--- Non-Maximum Suppression (200 runs avg) ---
+H->D:   13.759 ms
+Kernel: 1.015 ms
+D->H:   2.678 ms
+Total:  17.453 ms
+
+SOBEL_OPTIMIZED NMS_PINNED
+--- Non-Maximum Suppression (warm-up run) ---
+H->D:   6.178 ms
+Kernel: 1.002 ms
+D->H:   1.315 ms
+Total:  8.496 ms
+--- Non-Maximum Suppression (200 runs avg) ---
+H->D:   6.379 ms
+Kernel: 1.009 ms
+D->H:   1.361 ms
+Total:  8.749 ms
+
+SOBEL_BUCKET NMS_NAIVE
+--- Non-Maximum Suppression (warm-up run) ---
+H->D:   3.778 ms
+Kernel: 0.571 ms
+D->H:   6.416 ms
+Total:  10.765 ms
+--- Non-Maximum Suppression (200 runs avg) ---
+H->D:   4.020 ms
+Kernel: 0.576 ms
+D->H:   1.925 ms
+Total:  6.521 ms
+
+SOBEL_BUCKET NMS_SHARED
+--- Non-Maximum Suppression (warm-up run) ---
+H->D:   5.521 ms
+Kernel: 1.037 ms
+D->H:   9.325 ms
+Total:  15.883 ms
+--- Non-Maximum Suppression (200 runs avg) ---
+H->D:   7.221 ms
+Kernel: 0.879 ms
+D->H:   3.525 ms
+Total:  11.625 ms
+
+SOBEL_BUCKET NMS_PINNED
+--- Non-Maximum Suppression (warm-up run) ---
+H->D:   2.484 ms
+Kernel: 0.881 ms
+D->H:   1.455 ms
+Total:  4.819 ms
+--- Non-Maximum Suppression (200 runs avg) ---
+H->D:   3.048 ms
+Kernel: 0.885 ms
+D->H:   1.640 ms
+Total:  5.572 ms
