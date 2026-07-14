@@ -51,10 +51,10 @@ nvcc $COMMON_FLAGS $DEFINES \
 nvcc $COMMON_FLAGS -DGAUSSIAN_OPT=$GAUSSIAN_OPT \
   -c -o "$BIN_DIR/gaussian.profile.o" src/gaussian.cu
 
-nvcc $COMMON_FLAGS -DSOBEL_OPT=$SOBEL_OPT \
+nvcc $COMMON_FLAGS -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT \
   -c -o "$BIN_DIR/sobel.profile.o" src/sobel.cu
 
-nvcc $COMMON_FLAGS -DNMS_OPT=$NMS_OPT \
+nvcc $COMMON_FLAGS -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT \
   -c -o "$BIN_DIR/nms.profile.o" src/nms.cu
 
 nvcc -dlink -arch=$ARCH \

@@ -55,14 +55,14 @@ if [ $? -ne 0 ]; then echo "Failed: gaussian.cu"; exit 1; fi
 
 nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
   --generate-line-info \
-  -DSOBEL_OPT=$SOBEL_OPT \
+  -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT \
   -c -o "$BIN_DIR/sobel.o" src/sobel.cu
 
 if [ $? -ne 0 ]; then echo "Failed: sobel.cu"; exit 1; fi
 
 nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
   --generate-line-info \
-  -DNMS_OPT=$NMS_OPT \
+  -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT \
   -c -o "$BIN_DIR/nms.o" src/nms.cu
 
 if [ $? -ne 0 ]; then echo "Failed: nms.cu"; exit 1; fi
