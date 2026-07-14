@@ -16,6 +16,7 @@
 #
 #   NMS_OPT=0       naive
 #   NMS_OPT=1       shared memory
+#   NMS_OPT=2       pinned memory
 #
 #   WARMUP=1        warm-up run enabled
 #   WARMUP=0        warm-up run disabled
