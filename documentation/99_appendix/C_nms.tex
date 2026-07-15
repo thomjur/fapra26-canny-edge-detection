@@ -1,73 +1,73 @@
-MStefan
+\section{NMS Messungen}
+\label{app:nms-results}
 
-SOBEL_OPTIMIZED NMS_NAIVE
---- Non-Maximum Suppression (warm-up run) ---
-H->D:   10.035 ms
-Kernel: 0.603 ms
-D->H:   6.540 ms
-Total:  17.178 ms
---- Non-Maximum Suppression (200 runs avg) ---
-H->D:   9.865 ms
-Kernel: 0.633 ms
-D->H:   1.925 ms
-Total:  12.423 ms
+\begin{table}[H]
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabularx}{\textwidth}{l RR RR RR}
+\toprule
+& \multicolumn{2}{c}{naive} & \multicolumn{2}{c}{shared} & \multicolumn{2}{c}{pinned} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+Metrik & MS & TJ & MS & TJ & MS & TJ \\
+\midrule
+\multicolumn{7}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  & 10.035 & 0.000 & 14.527 & 0.000 &  6.178 & 0.000 \\
+Kernel [ms]   &  0.603 & 0.000 &  1.089 & 0.000 &  1.002 & 0.000 \\
+D$\to$H [ms]  &  6.540 & 0.000 &  7.319 & 0.000 &  1.315 & 0.000 \\
+Total [ms]    & 17.178 & 0.000 & 22.935 & 0.000 &  8.496 & 0.000 \\
+\midrule
+\multicolumn{7}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  9.865 & 0.000 & 13.759 & 0.000 &  6.379 & 0.000 \\
+Kernel [ms]   &  0.633 & 0.000 &  1.015 & 0.000 &  1.009 & 0.000 \\
+D$\to$H [ms]  &  1.925 & 0.000 &  2.678 & 0.000 &  1.361 & 0.000 \\
+Total [ms]    & 12.423 & 0.000 & 17.453 & 0.000 &  8.749 & 0.000 \\
+\bottomrule
+    \end{tabularx}
+    \caption{NMS mit Float-Richtungspuffer (\texttt{SOBEL\_OPT=2}). \\
+    cudaEvent-Messungen. MS: Matthias Stefan, TJ: Thomas Jurczyk.}
+    \label{tab:nms-float}
+\end{table}
 
-SOBEL_OPTIMIZED NMS_SHARED
---- Non-Maximum Suppression (warm-up run) ---
-H->D:   14.527 ms
-Kernel: 1.089 ms
-D->H:   7.319 ms
-Total:  22.935 ms
---- Non-Maximum Suppression (200 runs avg) ---
-H->D:   13.759 ms
-Kernel: 1.015 ms
-D->H:   2.678 ms
-Total:  17.453 ms
+\begin{table}[H]
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabularx}{\textwidth}{l RR RR RR}
+\toprule
+& \multicolumn{2}{c}{naive} & \multicolumn{2}{c}{shared} & \multicolumn{2}{c}{pinned} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+Metrik & MS & TJ & MS & TJ & MS & TJ \\
+\midrule
+\multicolumn{7}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  3.778 & 0.000 &  5.521 & 0.000 &  2.484 & 0.000 \\
+Kernel [ms]   &  0.571 & 0.000 &  1.037 & 0.000 &  0.881 & 0.000 \\
+D$\to$H [ms]  &  6.416 & 0.000 &  9.325 & 0.000 &  1.455 & 0.000 \\
+Total [ms]    & 10.765 & 0.000 & 15.883 & 0.000 &  4.819 & 0.000 \\
+\midrule
+\multicolumn{7}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  4.020 & 0.000 &  7.221 & 0.000 &  3.048 & 0.000 \\
+Kernel [ms]   &  0.576 & 0.000 &  0.879 & 0.000 &  0.885 & 0.000 \\
+D$\to$H [ms]  &  1.925 & 0.000 &  3.525 & 0.000 &  1.640 & 0.000 \\
+Total [ms]    &  6.521 & 0.000 & 11.625 & 0.000 &  5.572 & 0.000 \\
+\bottomrule
+    \end{tabularx}
+    \caption{NMS mit vorquantisiertem Bucket-Richtungspuffer
+        (\texttt{SOBEL\_OPT=4}). cudaEvent-Messungen. \\
+        MS: Matthias Stefan, TJ: Thomas Jurczyk.}
+    \label{tab:nms-bucket}
+\end{table}
 
-SOBEL_OPTIMIZED NMS_PINNED
---- Non-Maximum Suppression (warm-up run) ---
-H->D:   6.178 ms
-Kernel: 1.002 ms
-D->H:   1.315 ms
-Total:  8.496 ms
---- Non-Maximum Suppression (200 runs avg) ---
-H->D:   6.379 ms
-Kernel: 1.009 ms
-D->H:   1.361 ms
-Total:  8.749 ms
-
-SOBEL_BUCKET NMS_NAIVE
---- Non-Maximum Suppression (warm-up run) ---
-H->D:   3.778 ms
-Kernel: 0.571 ms
-D->H:   6.416 ms
-Total:  10.765 ms
---- Non-Maximum Suppression (200 runs avg) ---
-H->D:   4.020 ms
-Kernel: 0.576 ms
-D->H:   1.925 ms
-Total:  6.521 ms
-
-SOBEL_BUCKET NMS_SHARED
---- Non-Maximum Suppression (warm-up run) ---
-H->D:   5.521 ms
-Kernel: 1.037 ms
-D->H:   9.325 ms
-Total:  15.883 ms
---- Non-Maximum Suppression (200 runs avg) ---
-H->D:   7.221 ms
-Kernel: 0.879 ms
-D->H:   3.525 ms
-Total:  11.625 ms
-
-SOBEL_BUCKET NMS_PINNED
---- Non-Maximum Suppression (warm-up run) ---
-H->D:   2.484 ms
-Kernel: 0.881 ms
-D->H:   1.455 ms
-Total:  4.819 ms
---- Non-Maximum Suppression (200 runs avg) ---
-H->D:   3.048 ms
-Kernel: 0.885 ms
-D->H:   1.640 ms
-Total:  5.572 ms
+\begin{table}[H]
+    \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik (NCU, 10 Runs Avg) & naive & shared & pinned \\
+\midrule
+Compute (SM) Throughput [\%]        & 31.06 & 31.22 & 31.62 \\
+Memory Throughput [\%]              & 26.93 & 24.65 & 24.96 \\
+DRAM Throughput [\%]                & 26.15 & 17.43 & 18.20 \\
+Achieved Occupancy [\%]             & 85.10 & 93.37 & 90.21 \\
+Warp Cycles Per Issued Instruction  & 31.17 & 22.51 & 23.06 \\
+L1/TEX Hit Rate [\%]                & 50.44 & 23.32 & 23.23 \\
+L2 Hit Rate [\%]                    & 85.18 & 85.64 & 85.81 \\
+\bottomrule
+    \end{tabularx}
+    \caption{NCU-Profiling der NMS-Kernel, \texttt{SOBEL\_OPT = 4}
+    (Bucket-Richtung). 10 Runs, Warm-up ausgeschlossen.}
+\end{table}
