@@ -16,11 +16,13 @@
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory
-#   NMS_OPT=2       pinned memory
+#   NMS_OPT=2       opt version without shared memory
+#   NMS_OPT=3       opt version with pinned memory shared memory
 #
 #   HYSTERESIS_OPT=0       naive         (default)
 #   HYSTERESIS_OPT=1       shared memory
-
+#   HYSTERESIS_OPT=2       shared memory + pinned memory
+#
 #   WARMUP=1        warm-up run enabled   (default)
 #   WARMUP=0        warm-up run disabled
 

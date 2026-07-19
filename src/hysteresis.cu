@@ -67,6 +67,18 @@ HysteresisResult hysteresis_execute(const uint8_t *host_buffer,
   naive_hysteresis_linker<<<grid_dim, block_dim>>>(
       device_buffer, width, height, device_dst, low_threshold, high_threshold);
 #endif
+#if defined(HYSTERESIS_SHARED)
+  hysteresis_sharedm<<<grid_dim, block_dim>>>(
+      device_buffer, width, height, device_dst, low_threshold, high_threshold);
+#endif
+#if defined(HYSTERESIS_OPTIMIZED)
+  hysteresis_opt<<<grid_dim, block_dim>>>(
+      device_buffer, width, height, device_dst, low_threshold, high_threshold);
+#endif
+#if defined(HYSTERESIS_PINNED)
+  hysteresis_opt<<<grid_dim, block_dim>>>(
+      device_buffer, width, height, device_dst, low_threshold, high_threshold);
+#endif
   CUDA_THROW_IF_FAILED(cudaGetLastError());
   cudaEventRecord(t2);
 
@@ -159,4 +171,180 @@ naive_hysteresis_linker(const uint8_t *src_buffer, const int32_t width,
   else {
     out_buffer[index] = 0;
   }
+}
+
+/**
+ * @brief Hysteresis edge linking using shared-memory tiling.
+ *
+ * This kernel classifies each pixel as edge (255) or non-edge (0):
+ * - Strong pixel (p >= high_t) -> edge (255)
+ * - Weak pixel   (low_t <= p < high_t) -> edge only if at least one of its
+ *   8 neighbors is strong (>= high_t)
+ * - Otherwise -> non-edge (0)
+ *
+ * Performance notes:
+ * - Uses shared memory tile with a 1-pixel halo to reduce global memory reads.
+ * - Neighbor checks are performed from shared memory (faster than global
+ * loads).
+ *
+ * @param src      Input grayscale image (device pointer, uint8_t)
+ * @param width    Image width in pixels
+ * @param height   Image height in pixels
+ * @param dst      Output binary edge image (device pointer, uint8_t)
+ * @param low_t    Low threshold
+ * @param high_t   High threshold
+ */
+__global__ void hysteresis_sharedm(uint8_t *src, const int32_t width,
+                                   const int32_t height, uint8_t *dst,
+                                   uint8_t low_t, uint8_t high_t) {
+  // Shared tile includes a 1-pixel halo on each side:
+  // tile size = (BY + 2) x (BX + 2)
+  __shared__ uint8_t tile[BLOCK_SIZE + 2][BLOCK_SIZE + 2];
+
+  // Global coordinates of this thread's pixel
+  const int gx = blockIdx.x * BLOCK_SIZE + threadIdx.x;
+  const int gy = blockIdx.y * BLOCK_SIZE + threadIdx.y;
+
+  // Local coordinates inside shared tile (+1 because of halo border)
+  const int lx = threadIdx.x + 1;
+  const int ly = threadIdx.y + 1;
+
+  // -------------------------------
+  // 1) Load center pixel into shared memory
+  // -------------------------------
+  tile[ly][lx] = (gx < width && gy < height) ? src[gy * width + gx] : 0;
+
+  // -------------------------------
+  // 2) Load halo pixels (block borders)
+  //    Only border threads do these loads
+  // -------------------------------
+  if (threadIdx.x == 0) {
+    tile[ly][0] = (gx > 0 && gy < height) ? src[gy * width + (gx - 1)] : 0;
+  }
+  if (threadIdx.x == BLOCK_SIZE - 1) {
+    tile[ly][BLOCK_SIZE + 1] =
+        (gx + 1 < width && gy < height) ? src[gy * width + (gx + 1)] : 0;
+  }
+  if (threadIdx.y == 0) {
+    tile[0][lx] = (gy > 0 && gx < width) ? src[(gy - 1) * width + gx] : 0;
+  }
+  if (threadIdx.y == BLOCK_SIZE - 1) {
+    tile[BLOCK_SIZE + 1][lx] =
+        (gy + 1 < height && gx < width) ? src[(gy + 1) * width + gx] : 0;
+  }
+
+  // -------------------------------
+  // 3) Load halo corners
+  // -------------------------------
+  if (threadIdx.x == 0 && threadIdx.y == 0) {
+    tile[0][0] = (gx > 0 && gy > 0) ? src[(gy - 1) * width + (gx - 1)] : 0;
+  }
+  if (threadIdx.x == BLOCK_SIZE - 1 && threadIdx.y == 0) {
+    tile[0][BLOCK_SIZE + 1] =
+        (gx + 1 < width && gy > 0) ? src[(gy - 1) * width + (gx + 1)] : 0;
+  }
+  if (threadIdx.x == 0 && threadIdx.y == BLOCK_SIZE - 1) {
+    tile[BLOCK_SIZE + 1][0] =
+        (gx > 0 && gy + 1 < height) ? src[(gy + 1) * width + (gx - 1)] : 0;
+  }
+  if (threadIdx.x == BLOCK_SIZE - 1 && threadIdx.y == BLOCK_SIZE - 1) {
+    tile[BLOCK_SIZE + 1][BLOCK_SIZE + 1] =
+        (gx + 1 < width && gy + 1 < height) ? src[(gy + 1) * width + (gx + 1)]
+                                            : 0;
+  }
+
+  // Wait until full tile (center + halo) is available
+  __syncthreads();
+
+  // Skip out-of-image threads
+  if (gx >= width || gy >= height)
+    return;
+
+  // -------------------------------
+  // 4) Classify pixel
+  // -------------------------------
+  const uint8_t p = tile[ly][lx];
+  uint8_t out = 0;
+
+  // Strong edges are accepted directly
+  if (p >= high_t) {
+    out = 255;
+  }
+  // Weak edges: keep only if at least one strong neighbor exists
+  else if (p >= low_t) {
+    uint8_t max_n = 0;
+
+    // Check 8-neighborhood from shared memory
+    max_n = max(max_n, tile[ly - 1][lx - 1]);
+    max_n = max(max_n, tile[ly - 1][lx]);
+    max_n = max(max_n, tile[ly - 1][lx + 1]);
+    max_n = max(max_n, tile[ly][lx - 1]);
+    max_n = max(max_n, tile[ly][lx + 1]);
+    max_n = max(max_n, tile[ly + 1][lx - 1]);
+    max_n = max(max_n, tile[ly + 1][lx]);
+    max_n = max(max_n, tile[ly + 1][lx + 1]);
+
+    out = (max_n >= high_t) ? 255 : 0;
+  }
+
+  // Write output
+  dst[gy * width + gx] = out;
+}
+
+/**
+ * @brief Hysteresis edge linking optimized WITHOUT shared-memory tiling.
+ *
+ * This kernel classifies each pixel as edge (255) or non-edge (0):
+ * - Strong pixel (p >= high_t) -> edge (255)
+ * - Weak pixel   (low_t <= p < high_t) -> edge only if at least one of its
+ *   8 neighbors is strong (>= high_t)
+ * - Otherwise -> non-edge (0)
+ *
+ * Performance notes:
+ * - Neighbor checks are performed using unrolled neighbor checking.
+ *
+ * @param src      Input grayscale image (device pointer, uint8_t)
+ * @param width    Image width in pixels
+ * @param height   Image height in pixels
+ * @param dst      Output binary edge image (device pointer, uint8_t)
+ * @param low_t    Low threshold
+ * @param high_t   High threshold
+ */
+__global__ void hysteresis_opt(uint8_t *src, const int32_t width,
+                               const int32_t height, uint8_t *dst,
+                               uint8_t low_t, uint8_t high_t) {
+  int x = blockIdx.x * blockDim.x + threadIdx.x;
+  int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+  if (x >= width || y >= height)
+    return;
+
+  int index = y * width + x;
+  const uint8_t p = src[index];
+
+  uint8_t out = 0;
+
+  // Strong edges are accepted directly
+  if (p >= high_t) {
+    out = 255;
+  }
+  // Weak edges: keep only if at least one strong neighbor exists
+  else if (p >= low_t) {
+    uint8_t max_n = 0;
+
+    // Check 8-neighborhood from shared memory
+    max_n = max(max_n, src[(y - 1) * width + x - 1]);
+    max_n = max(max_n, src[(y - 1) * width + x]);
+    max_n = max(max_n, src[(y - 1) * width + x + 1]);
+    max_n = max(max_n, src[y * width + x - 1]);
+    max_n = max(max_n, src[y * width + x + 1]);
+    max_n = max(max_n, src[(y + 1) * width + x - 1]);
+    max_n = max(max_n, src[(y + 1) * width + x]);
+    max_n = max(max_n, src[(y + 1) * width + x + 1]);
+
+    out = (max_n >= high_t) ? 255 : 0;
+  }
+
+  // Write output
+  dst[index] = out;
 }

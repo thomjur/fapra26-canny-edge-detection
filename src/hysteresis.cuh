@@ -11,8 +11,12 @@
 #define HYSTERESIS_NAIVE
 #elif HYSTERESIS_OPT == 1
 #define HYSTERESIS_SHARED
+#elif HYSTERESIS_OPT == 2
+#define HYSTERESIS_OPTIMIZED
+#elif HYSTERESIS_OPT == 3
+#define HYSTERESIS_PINNED
 #else
-#error "HYSTERESIS_OPT must be 0, or 1"
+#error "HYSTERESIS_OPT must be 0, 1 or 2"
 #endif
 
 #define HIGH_THRESHOLD 150
@@ -65,6 +69,53 @@ naive_hysteresis_linker(const uint8_t *src_buffer, const int32_t width,
                         const int32_t height, uint8_t *out_buffer,
                         uint8_t low_threshold, uint8_t high_threshold);
 
+/**
+ * @brief Hysteresis edge linking using shared-memory tiling.
+ *
+ * This kernel classifies each pixel as edge (255) or non-edge (0):
+ * - Strong pixel (p >= high_t) -> edge (255)
+ * - Weak pixel   (low_t <= p < high_t) -> edge only if at least one of its
+ *   8 neighbors is strong (>= high_t)
+ * - Otherwise -> non-edge (0)
+ *
+ * Performance notes:
+ * - Uses shared memory tile with a 1-pixel halo to reduce global memory reads.
+ * - Neighbor checks are performed from shared memory (faster than global
+ * loads).
+ *
+ * @param src      Input grayscale image (device pointer, uint8_t)
+ * @param width    Image width in pixels
+ * @param height   Image height in pixels
+ * @param dst      Output binary edge image (device pointer, uint8_t)
+ * @param low_t    Low threshold
+ * @param high_t   High threshold
+ */
+__global__ void hysteresis_sharedm(uint8_t *src, const int32_t width,
+                                   const int32_t height, uint8_t *dst,
+                                   uint8_t low_t, uint8_t high_t);
+
+/**
+ * @brief Hysteresis edge linking optimized WITHOUT shared-memory tiling.
+ *
+ * This kernel classifies each pixel as edge (255) or non-edge (0):
+ * - Strong pixel (p >= high_t) -> edge (255)
+ * - Weak pixel   (low_t <= p < high_t) -> edge only if at least one of its
+ *   8 neighbors is strong (>= high_t)
+ * - Otherwise -> non-edge (0)
+ *
+ * Performance notes:
+ * - Neighbor checks are performed using unrolled neighbor checking.
+ *
+ * @param src      Input grayscale image (device pointer, uint8_t)
+ * @param width    Image width in pixels
+ * @param height   Image height in pixels
+ * @param dst      Output binary edge image (device pointer, uint8_t)
+ * @param low_t    Low threshold
+ * @param high_t   High threshold
+ */
+__global__ void hysteresis_opt(uint8_t *src, const int32_t width,
+                               const int32_t height, uint8_t *dst,
+                               uint8_t low_t, uint8_t high_t);
 /**
  * @brief Releases the host buffer allocated by hysteresis_execute().
  *
