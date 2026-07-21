@@ -19,3 +19,98 @@ Abschnitt~\ref{sec:impl_non-maximum-suppression}).
 \end{figure}
 
 \subsubsection{Performance}
+
+Das NCU-Profiling zeigt, dass der NMS-Kernel in allen drei Varianten
+sowohl beim Compute- als auch beim Memory-Throughput im Bereich von
+rund 31\,\% respektive 25\,\% verbleibt (Tabelle~\ref{tab:nms-ncu}), der
+Kernel ist also weder rechen- noch bandbreitengebunden, sondern
+latenzgebunden. Jeder Thread liest lediglich seinen eigenen
+Magnitudenwert sowie die zwei Nachbarn entlang der Gradientenrichtung,
+weshalb der redundante DRAM-Traffic, der beim Gaussian Blur die Shared
+Memory Optimierung motiviert, hier weitgehend entfällt.
+
+Entsprechend zeigt Abbildung~\ref{fig:nms_ncu} ein zum Gaussian Blur
+gegenläufiges Bild. Der SM Throughput bleibt über naive, shared und
+pinned praktisch unverändert, die Shared-Memory-Variante hebt die
+Auslastung also nicht an. Gleichzeitig steigt die Kernel-Laufzeit von
+$0.576$\,ms auf $0.879$\,ms, da das kooperative Laden der Kachel und die
+\texttt{\_\_syncthreads()}-Barriere Overhead erzeugen, dem bei einem so
+kleinen Stencil keine nennenswerte Einsparung gegenübersteht.
+
+Das Profiling bestätigt diese Deutung im Detail: Die Shared-Memory-Variante
+senkt zwar den DRAM Throughput von $26.15$\,\% auf $17.43$\,\% und hebt die
+Occupancy von $85.10$\,\% auf $93.37$\,\%, doch da der Kernel nicht
+bandbreitengebunden ist, übersetzt sich diese Einsparung nicht in eine
+kürzere Laufzeit. Die naive Variante profitiert zudem von einer
+L1-Hit-Rate von $50.44$\,\%, die in der Shared-Memory-Variante auf
+$23.32$\,\% fällt, da die Zwischenpufferung in Shared Memory den L1-Pfad
+umgeht.
+
+Der vorquantisierte Bucket-Richtungspuffer
+(Tabelle~\ref{tab:nms-bucket}) senkt die naive Kernel-Laufzeit
+gegenüber dem Float-Puffer von $0.633$\,ms auf $0.576$\,ms, da pro
+Thread die Umrechnung von Radiant in Grad entfällt und statt eines
+\texttt{float} nur ein \texttt{uint8\_t} gelesen wird.
+
+Bemerkenswert ist, dass keine der herangezogenen Referenzarbeiten einen
+quantifizierten Shared-Memory-gegen-naiv-Vergleich speziell für die
+Non-Maximum Suppression liefert. Für diese Pipeline-Stufe zahlt sich
+Shared Memory Tiling, anders als beim Gaussian Blur, nicht aus.
+
+Die Pinned-Memory-Variante lässt den Kernel unverändert und wirkt sich,
+wie beim Gaussian Blur, primär auf den Device-to-Host-Transfer aus, der
+von $1.925$\,ms auf $1.640$\,ms sinkt. Die vollständigen Messdaten sind
+in Anhang~C (S.~\pageref{app:nms-results}) aufgeführt.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \begin{tikzpicture}
+            \begin{axis}[
+                ybar,
+                bar width=12pt,
+                title={SM Throughput (\%)},
+                title style={font=\footnotesize},
+                xtick=\empty,
+                width=\textwidth, height=6cm,
+                ymin=0, ymax=42,
+                enlarge x limits=1.3,
+                legend style={at={(0.5,-0.15)}, anchor=north, legend columns=3, font=\tiny},
+                nodes near coords,
+                nodes near coords style={font=\tiny, rotate=90, anchor=west},
+            ]
+                \addplot[fill={rgb,255:red,70;green,130;blue,200}]  coordinates {(1,31.06)};
+                \addplot[fill={rgb,255:red,240;green,160;blue,50}]  coordinates {(1,31.22)};
+                \addplot[fill={rgb,255:red,100;green,190;blue,120}] coordinates {(1,31.62)};
+                \legend{naive, shared, pinned}
+            \end{axis}
+        \end{tikzpicture}
+    \end{minipage}
+    \hfill
+    \begin{minipage}{0.48\textwidth}
+        \begin{tikzpicture}
+            \begin{axis}[
+                ybar,
+                bar width=12pt,
+                title={Kernel Duration (ms)},
+                title style={font=\footnotesize},
+                xtick=\empty,
+                width=\textwidth, height=6cm,
+                ymin=0, ymax=1.2,
+                enlarge x limits=1.3,
+                legend style={at={(0.5,-0.15)}, anchor=north, legend columns=3, font=\tiny},
+                nodes near coords,
+                nodes near coords style={font=\tiny, rotate=90, anchor=west},
+            ]
+                \addplot[fill={rgb,255:red,70;green,130;blue,200}]  coordinates {(1,0.576)};
+                \addplot[fill={rgb,255:red,240;green,160;blue,50}]  coordinates {(1,0.879)};
+                \addplot[fill={rgb,255:red,100;green,190;blue,120}] coordinates {(1,0.885)};
+                \legend{naive, shared, pinned}
+            \end{axis}
+        \end{tikzpicture}
+    \end{minipage}
+    \caption{NMS-Profiling, \texttt{SOBEL\_OPT=4} (Bucket-Richtung).
+    SM Throughput aus NCU (10 Runs), Kernel Duration aus
+    cudaEvent-Messung (200 Runs Avg).}
+    \label{fig:nms_ncu}
+\end{figure}
