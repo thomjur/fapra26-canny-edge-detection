@@ -16,7 +16,12 @@
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory
-#   NMS_OPT=2       pinned memory
+#   NMS_OPT=2       opt version without shared memory
+#   NMS_OPT=3       opt version with pinned memory shared memory
+#
+#   HYSTERESIS_OPT=0       naive         (default)
+#   HYSTERESIS_OPT=1       shared memory
+#   HYSTERESIS_OPT=2       shared memory + pinned memory
 #
 #   WARMUP=1        warm-up run enabled   (default)
 #   WARMUP=0        warm-up run disabled
@@ -26,12 +31,13 @@ BINARY="$BIN_DIR/canny_release.out"
 GAUSSIAN_OPT="${GAUSSIAN_OPT:-2}"
 SOBEL_OPT="${SOBEL_OPT:-3}"
 NMS_OPT="${NMS_OPT:-1}"
+HYSTERESIS_OPT="${HYSTERESIS_OPT:-0}"
 WARMUP="${WARMUP:-0}"
 ARCH="sm_75"
 
 mkdir -p "$BIN_DIR"
 
-echo "[release] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, WARMUP=$WARMUP ..."
+echo "[release] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, HYSTERESIS_OPT=$HYSTERESIS_OPT, WARMUP=$WARMUP ..."
 
 WARMUP_FLAG=""
 if [ "$WARMUP" -eq 1 ]; then
@@ -67,10 +73,17 @@ nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
 
 if [ $? -ne 0 ]; then echo "Failed: nms.cu"; exit 1; fi
 
+nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
+  --generate-line-info \
+  -DHYSTERESIS_OPT=$HYSTERESIS_OPT \
+  -c -o "$BIN_DIR/hysteresis.o" src/hysteresis.cu
+
+if [ $? -ne 0 ]; then echo "Failed: hysteresis.cu"; exit 1; fi
+
 # device link step (required for rdc=true)
 nvcc -dlink -arch=$ARCH \
   -o "$BIN_DIR/device_link.o" \
-  "$BIN_DIR/main.o" "$BIN_DIR/gaussian.o" "$BIN_DIR/sobel.o" "$BIN_DIR/nms.o"
+  "$BIN_DIR/main.o" "$BIN_DIR/gaussian.o" "$BIN_DIR/sobel.o" "$BIN_DIR/nms.o" "$BIN_DIR/hysteresis.o"
 
 if [ $? -ne 0 ]; then echo "Failed: device link"; exit 1; fi
 
@@ -80,6 +93,7 @@ nvcc -arch=$ARCH -o "$BINARY" \
   "$BIN_DIR/gaussian.o" \
   "$BIN_DIR/sobel.o" \
   "$BIN_DIR/nms.o" \
+  "$BIN_DIR/hysteresis.o" \
   "$BIN_DIR/device_link.o"
 
 if [ $? -eq 0 ]; then
