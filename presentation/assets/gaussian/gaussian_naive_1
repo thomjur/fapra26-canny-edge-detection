@@ -1,0 +1,76 @@
+\documentclass[border=8pt]{standalone}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+
+\definecolor{cBlur}{RGB}{129,145,222}
+\definecolor{codebg}{RGB}{250,250,248}
+\definecolor{codekw}{RGB}{60,90,190}      % Keywords
+\definecolor{codetype}{RGB}{20,130,110}   % Typen
+\definecolor{codecomment}{RGB}{130,130,130} % Kommentare
+\definecolor{codestring}{RGB}{170,90,20}
+
+\lstdefinelanguage{CUDA}{
+    language=C++,
+    morekeywords={__global__, __device__, __host__, __shared__, __constant__,
+    blockIdx, blockDim, threadIdx, gridDim, auto, static_cast, uint8_t,
+    int32_t, uint32_t},
+}
+
+\lstset{
+    language=CUDA,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{codekw}\bfseries,
+    commentstyle=\color{codecomment}\itshape,
+    stringstyle=\color{codestring},
+    numbers=left,
+    numberstyle=\tiny\color{black!45},
+    numbersep=8pt,
+    frame=none,
+    breaklines=false,
+    tabsize=2,
+    showstringspaces=false,
+    columns=flexible,
+    xleftmargin=1.2em,
+    framexleftmargin=1.2em,
+}
+
+\begin{document}
+    \begin{minipage}{20cm}
+        \begin{lstlisting}
+__global__ void gaussian_filter(
+    const uint8_t *src_buffer,
+    const int32_t width, const int32_t height,
+    const float *weights, const uint32_t blur_radius,
+    uint8_t *out_dst_buffer)
+{
+    // global pixel position in the image
+    const auto x = static_cast<int32_t>(blockIdx.x * blockDim.x + threadIdx.x);
+    const auto y = static_cast<int32_t>(blockIdx.y * blockDim.y + threadIdx.y);
+    if (x >= width || y >= height)
+        return;
+
+    // accumulate weighted sum of neighboring pixels (zero-padding at borders)
+    float color = 0.0f;
+    const auto radius = static_cast<int32_t>(blur_radius);
+    for (int32_t y_ = -radius; y_ <= radius; y_++)
+    {
+        for (int32_t x_ = -radius; x_ <= radius; x_++)
+        {
+            // clamp to image border (zero-padding)
+            uint8_t pixel = 0;
+            if (x + x_ >= 0 && x + x_ < width && y + y_ >= 0 && y + y_ < height)
+                pixel = src_buffer[(y + y_) * width + (x + x_)];
+
+            // each neighbor is weighted by the precomputed gaussian weight
+            const uint32_t weight_idx = (y_ + radius) * (blur_radius * 2 + 1) + (x_ + radius);
+            color += pixel * weights[weight_idx];
+        }
+    }
+
+    out_dst_buffer[y * width + x] = static_cast<uint8_t>(color);
+}
+        \end{lstlisting}
+    \end{minipage}
+\end{document}
