@@ -159,7 +159,7 @@ __global__ void gaussian_filter(
     {
         for (int32_t x_ = -radius; x_ <= radius; x_++)
         {
-            // clamp to image border (zero-padding)
+            // out-of-bounds neighbors are treated as 0
             uint8_t pixel = 0;
             if (x + x_ >= 0 && x + x_ < width && y + y_ >= 0 && y + y_ < height)
                 pixel = src_buffer[(y + y_) * width + (x + x_)];
