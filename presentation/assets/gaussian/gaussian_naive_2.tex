@@ -1,0 +1,52 @@
+\documentclass[border=8pt]{standalone}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{positioning}
+
+% ---------- Farben (angelehnt an die Pipeline-Farbe für Gaussian Blur) ----------
+\definecolor{cBlur}{RGB}{129,145,222}
+\definecolor{codebg}{RGB}{250,250,248}
+\definecolor{codekw}{RGB}{60,90,190}      % Keywords
+\definecolor{codetype}{RGB}{20,130,110}   % Typen
+\definecolor{codecomment}{RGB}{130,130,130} % Kommentare
+\definecolor{codestring}{RGB}{170,90,20}
+
+\lstdefinelanguage{CUDA}{
+    language=C++,
+    morekeywords={__global__, __device__, __host__, __shared__, __constant__,
+    blockIdx, blockDim, threadIdx, gridDim, auto, static_cast, uint8_t,
+    int32_t, uint32_t},
+}
+
+\lstset{
+    language=CUDA,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{codekw}\bfseries,
+    commentstyle=\color{codecomment}\itshape,
+    stringstyle=\color{codestring},
+    numberstyle=\tiny\color{black!45},
+    numbersep=8pt,
+    frame=none,
+    breaklines=false,
+    tabsize=2,
+    showstringspaces=false,
+    columns=flexible,
+    xleftmargin=1.2em,
+    framexleftmargin=1.2em,
+}
+
+\begin{document}
+    \begin{minipage}{20cm}
+        \begin{lstlisting}
+Aufruf des Kernels:
+
+#define BLOCK_SIZE 16
+...
+dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+dim3 grid_dim(
+    static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+    static_cast<uint32_t>(std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+        \end{lstlisting}
+    \end{minipage}
+\end{document}

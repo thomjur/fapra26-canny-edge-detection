@@ -1,0 +1,91 @@
+\documentclass[tikz, border=8pt]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, decorations.pathreplacing, calc}
+
+\begin{document}
+\begin{tikzpicture}[
+    every node/.style={font=\scriptsize},
+    >=Stealth
+]
+
+% ---------- LEFT: full image with tile position ----------
+\def\cellL{0.38cm}
+\begin{scope}[xshift=0cm]
+    \foreach \x in {0,...,11}
+        \foreach \y in {0,...,8}{
+            \draw[gray!40, line width=0.2pt] (\x*\cellL, \y*\cellL) rectangle ++(\cellL,\cellL);
+        }
+    \draw[blue, thick] (4*\cellL, 2*\cellL) rectangle ++(6*\cellL, 5*\cellL);
+    \node[align=center] at (5.5*\cellL, 9.6*\cellL) {Bild (global memory)};
+    \node[blue, align=center] at (7*\cellL, 4.5*\cellL) {Block};
+\end{scope}
+
+% ---------- connecting arrow ----------
+\draw[->, thick] (12.6*\cellL, 4.2*\cellL) to[out=20, in=160] (14.4*\cellL, 4.2*\cellL);
+
+% ---------- RIGHT: zoomed tile with halo ----------
+\def\cellR{0.55cm}
+\def\radius{2}
+\def\blocksz{6}
+\begin{scope}[xshift=15.2*\cellL]
+
+    % cells
+    \foreach \x in {0,...,9}
+        \foreach \y in {0,...,9}{
+            \pgfmathtruncatemacro{\inCore}{(\x>=\radius) && (\x<\radius+\blocksz) && (\y>=\radius) && (\y<\radius+\blocksz)}
+            \ifnum\inCore=1
+                \fill[blue!18] (\x*\cellR, \y*\cellR) rectangle ++(\cellR,\cellR);
+            \else
+                \fill[orange!30] (\x*\cellR, \y*\cellR) rectangle ++(\cellR,\cellR);
+            \fi
+        }
+    \foreach \x in {0,...,10}
+        \draw[gray!60, line width=0.2pt] (\x*\cellR, 0) -- (\x*\cellR, 10*\cellR);
+    \foreach \y in {0,...,10}
+        \draw[gray!60, line width=0.2pt] (0, \y*\cellR) -- (10*\cellR, \y*\cellR);
+
+    \draw[blue, thick] (\radius*\cellR, \radius*\cellR) rectangle ++(\blocksz*\cellR, \blocksz*\cellR);
+    \draw[orange!80!black, thick, dashed] (0,0) rectangle ++(10*\cellR, 10*\cellR);
+
+    % marker (1): core thread, loads only neighbors that are part of the block itself
+    \node[circle, draw=blue!70!black, fill=blue!70!white, text=white, inner sep=1.2pt, font=\tiny\bfseries] (t1)
+        at ({(\radius+2.5)*\cellR}, {(\radius+3.5)*\cellR}) {1};
+    \draw[->, blue!70!black, thick] (t1) -- ++({1.0*\cellR}, 0);
+    \draw[->, blue!70!black, thick] (t1) -- ++(0, {-1.0*\cellR});
+    \draw[->, blue!70!black, thick] (t1) -- ++({-1.0*\cellR}, 0);
+
+    % marker (2): edge thread, additionally loads pixels outside the original block (halo)
+    \node[circle, draw=red!70!black, fill=red!70!white, text=white, inner sep=1.2pt, font=\tiny\bfseries] (t2)
+        at ({(\radius+0.5)*\cellR}, {(\radius+0.5)*\cellR}) {2};
+    \draw[->, red!70!black, thick, dashed] (t2) -- ++({-1.0*\cellR}, 0);
+    \draw[->, red!70!black, thick, dashed] (t2) -- ++(0, {-1.0*\cellR});
+    \draw[->, red!70!black, thick, dashed] (t2) -- ++({-1.0*\cellR}, {-1.0*\cellR});
+
+    % brace: tile_size (top)
+    \draw[decorate, decoration={brace, amplitude=5pt}, thick]
+        (0, {10.25*\cellR}) -- ({10*\cellR}, {10.25*\cellR})
+        node[midway, above=6pt] {\texttt{tile\_size} = BLOCK\_SIZE + 2$\cdot$radius};
+
+    % brace: BLOCK_SIZE (below tile, own row so it never collides with legend)
+    \draw[decorate, decoration={brace, amplitude=4pt, mirror}, thick, blue]
+        ({\radius*\cellR}, {-0.3*\cellR}) -- ({(\radius+\blocksz)*\cellR}, {-0.3*\cellR})
+        node[midway, below=4pt, blue] {BLOCK\_SIZE};
+
+    % arrow: radius (halo thickness, left side)
+    \draw[<->, orange!80!black, thick] (-0.6*\cellR, 0) -- (-0.6*\cellR, {\radius*\cellR})
+        node[midway, left=2pt, align=center] {radius};
+
+    % ---- legend, well below everything else ----
+    \node[align=left, anchor=north west] at (0, {-2.0*\cellR}) {
+        \begin{tabular}{@{}rl@{}}
+        \textcolor{blue!70!black}{\textbf{1}} & lädt nur Block-Pixel\\
+        \textcolor{red!70!black}{\textbf{2}}  & lädt auch Halo-Pixel\\
+        \multicolumn{2}{@{}l@{}}{\textcolor{blue!50!white}{\rule{6pt}{6pt}}\; Block-Kern \quad
+                                  \textcolor{orange!50!white}{\rule{6pt}{6pt}}\; Halo (Rand, radius Pixel breit)}
+        \end{tabular}
+    };
+
+\end{scope}
+
+\end{tikzpicture}
+\end{document}
