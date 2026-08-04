@@ -1,4 +1,5 @@
 \documentclass[border=6pt]{standalone}
+\usepackage[T1]{fontenc}
 \usepackage{tikz}
 \usetikzlibrary{arrows.meta, positioning, decorations.pathreplacing, calc}
 
@@ -28,7 +29,7 @@
         box/.style={rectangle, draw=black!60, rounded corners, minimum width=2.8cm,
         minimum height=1cm, align=center, font=\small\bfseries, text=white},
         annot/.style={rectangle, rounded corners=2pt,
-        text width=2.6cm, align=left, font=\scriptsize, inner sep=4pt,
+        text width=3.0cm, align=left, font=\scriptsize, inner sep=4pt,
         line width=1.6pt},
         arrow/.style={->, thick},
         link/.style={gray!70, thin},
@@ -54,27 +55,32 @@
             {\textbf{Canny~[1]:} Grundstruktur der gesamten Pipeline};
 
         % --- Gaussian Blur ---
-        \node[annot, fill=cP4fill, draw=cP4border, below=6mm of blur]  (blur1) {\textbf{\textcolor{cP4border}{Song~[4]}:} Local Memory für Faltung ($n^2$ Nachbarn)};
-        \node[annot, fill=cP5fill, draw=cP5border, below=4mm of blur1] (blur2) {\textbf{\textcolor{cP5border}{Yadav \& Gupta~[5]}:} Roofline-Analyse (nur Gaussian-Kernel, 4 Optimierungsstufen)};
+        \node[annot, fill=cP4fill, draw=cP4border, below=6mm of blur]  (blur1) {\textbf{\textcolor{cP4border}{Song~[4]}:} Shared Memory für Faltung, $n^2$ Nachbarn};
+        \node[annot, fill=cP5fill, draw=cP5border, below=4mm of blur1] (blur2) {\textbf{\textcolor{cP5border}{Yadav \& Gupta~[5]}:} 4 Stufen: Naive $\rightarrow$ Warp $\rightarrow$ Shared Memory $\rightarrow$ Memory Lock};
         \draw[link] (blur.south) -- (blur1.north);
         \draw[link] (blur1.south) -- (blur2.north);
 
         % --- Sobel ---
-        \node[annot, fill=cP4fill, draw=cP4border, below=6mm of sobel]  (sobel1) {\textbf{\textcolor{cP4border}{Song~[4]}:} Local Memory für Faltung};
-        \node[annot, fill=cP2fill, draw=cP2border, below=4mm of sobel1] (sobel2) {\textbf{\textcolor{cP2border}{Horvath~[2]}:} hypot/atan2 als Bottleneck $\rightarrow$ 8$\times$ schneller durch Konstanten};
+        \node[annot, fill=cP4fill, draw=cP4border, below=6mm of sobel]  (sobel1) {\textbf{\textcolor{cP4border}{Song~[4]}:} Shared Memory für Faltung};
+        \node[annot, fill=cP2fill, draw=cP2border, below=4mm of sobel1] (sobel2) {\textbf{\textcolor{cP2border}{Horvath~[2]}:} atan2/hypot als Bottleneck $\rightarrow$ 8$\times$ schneller durch Konstanten-Ersatz};
         \draw[link] (sobel.south) -- (sobel1.north);
         \draw[link] (sobel1.south) -- (sobel2.north);
 
         % --- NMS ---
-        \node[annot, fill=cP4fill, draw=cP4border, below=6mm of nms]  (nms1) {\textbf{\textcolor{cP4border}{Song~[4]}:} kein Tiling (nur 2 Nachbarn)};
-        \node[annot, fill=cP3fill, draw=cP3border, below=4mm of nms1] (nms2) {\textbf{\textcolor{cP3border}{Ogawa~[3]}:} Global Memory, kein Tiling};
-        \node[annot, fill=cP2fill, draw=cP2border, below=4mm of nms2] (nms3) {\textbf{\textcolor{cP2border}{Horvath~[2]}:} Shared Memory, minimaler Halo};
+        % Deliberate contrast between the three papers -- kept distinct,
+        % not unified, since they genuinely differ:
+        %   Song:    skips shared memory by design (only 2 neighbors, not a full conv.)
+        %   Ogawa:   uses global memory only, no shared memory / tiling at all
+        %   Horvath: does use shared-memory tiling for NMS
+        \node[annot, fill=cP4fill, draw=cP4border, below=6mm of nms]  (nms1) {\textbf{\textcolor{cP4border}{Song~[4]}:} kein Shared Memory nötig (nur 2 Nachbarn statt Faltung)};
+        \node[annot, fill=cP3fill, draw=cP3border, below=4mm of nms1] (nms2) {\textbf{\textcolor{cP3border}{Ogawa~[3]}:} nur Global Memory, kein Shared Memory};
+        \node[annot, fill=cP2fill, draw=cP2border, below=4mm of nms2] (nms3) {\textbf{\textcolor{cP2border}{Horvath~[2]}:} Shared Memory statt Global Memory};
         \draw[link] (nms.south) -- (nms1.north);
         \draw[link] (nms1.south) -- (nms2.north);
         \draw[link] (nms2.south) -- (nms3.north);
 
         % --- Hysteresis ---
-        \node[annot, fill=cP3fill, draw=cP3border, below=6mm of hyst] (hyst1) {\textbf{\textcolor{cP3border}{Ogawa~[3]}:} stack-basierte Traversierung (lange Kantenketten über Bildkacheln hinweg)};
+        \node[annot, fill=cP3fill, draw=cP3border, below=6mm of hyst] (hyst1) {\textbf{\textcolor{cP3border}{Ogawa~[3]}:} stack-basierte Traversierung für lange Kantenketten über Bildkacheln hinweg};
         \draw[link] (hyst.south) -- (hyst1.north);
 
         \node[anchor=north west, inner sep=0pt] (legend) at ($(input.west |- nms3.south) + (0,-6mm)$)
