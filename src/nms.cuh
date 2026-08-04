@@ -24,18 +24,18 @@
 // Every optimization level exists in both a float and a bucket flavor.
 
 #ifndef NMS_OPT
-    #define NMS_OPT 0
+#define NMS_OPT 0
 #endif
 
 #if NMS_OPT == 0
-    #define NMS_NAIVE
+#define NMS_NAIVE
 #elif NMS_OPT == 1
-    #define NMS_SHARED
+#define NMS_SHARED
 #elif NMS_OPT == 2
-    #define NMS_SHARED   // pinned reuses the shared-memory kernel
-    #define NMS_PINNED
+#define NMS_SHARED   // pinned reuses the shared-memory kernel
+#define NMS_PINNED
 #else
-    #error "NMS_OPT must be 0 (naive), 1 (shared) or 2 (pinned)"
+#error "NMS_OPT must be 0 (naive), 1 (shared) or 2 (pinned)"
 #endif
 
 #ifdef SOBEL_BUCKET
@@ -162,3 +162,26 @@ __global__ void non_maximum_suppression_shared_bucket(
     int32_t width,
     int32_t height,
     uint8_t *out_nms_buffer);
+
+//
+// FUSED PIPELINE SUPPORT
+//
+
+#ifdef PIPELINE_FUSED
+
+/// @brief Launches only the NMS kernel — no cudaMalloc/cudaMemcpy/cudaFree.
+///        For the fused pipeline: d_magnitude/d_direction/d_nms must already
+///        be on the device (allocated by caller).
+///
+/// @param d_magnitude Gradient magnitude, already on device.
+/// @param d_direction Gradient direction (nms_dir_t: radians or bucket), already on device.
+/// @param d_nms       Output: thinned magnitude image, already on device.
+void nms_launch(
+    const uint8_t *d_magnitude,
+    const nms_dir_t *d_direction,
+    int32_t width,
+    int32_t height,
+    uint8_t *d_nms,
+    cudaStream_t stream = 0);
+
+#endif // #ifdef PIPELINE_FUSED

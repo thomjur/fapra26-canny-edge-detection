@@ -123,3 +123,25 @@ __global__ void hysteresis_opt(uint8_t *src, const int32_t width,
  *               After cleanup, hysteresis_buffer is set to nullptr.
  */
 void hysteresis_cleanup(HysteresisResult &result);
+
+//
+// FUSED PIPELINE SUPPORT
+//
+
+#ifdef PIPELINE_FUSED
+
+/// @brief Launches only the hysteresis kernel — no cudaMalloc/cudaMemcpy/cudaFree.
+///        For the fused pipeline: d_src/d_dst must already be on the device
+///        (allocated by caller). Uses HIGH_THRESHOLD/LOW_THRESHOLD, same as
+///        hysteresis_execute().
+///
+/// @param d_src   Input image (thinned NMS result), already on device.
+/// @param d_dst   Output binary edge image, already on device.
+void hysteresis_launch(
+    const uint8_t *d_src,
+    uint8_t *d_dst,
+    int32_t width,
+    int32_t height,
+    cudaStream_t stream = 0);
+
+#endif // #ifdef PIPELINE_FUSED

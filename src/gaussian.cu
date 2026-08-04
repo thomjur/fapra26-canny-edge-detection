@@ -238,3 +238,56 @@ __global__ void gaussian_filter(
     out_dst_buffer[y * width + x] = static_cast<uint8_t>(color);
 }
 #endif // #ifdef GAUSSIAN_SHARED
+
+//
+// FUSED PIPELINE SUPPORT
+//
+
+#ifdef PIPELINE_FUSED
+
+#ifdef GAUSSIAN_NAIVE
+// persistent device buffer for weights (NAIVE reads them from global memory,
+// so unlike GAUSSIAN_SHARED there is no constant-memory symbol to reuse)
+static float *g_device_weights = nullptr;
+#endif
+
+void gaussian_prepare_weights(uint32_t blur_radius, float sigma)
+{
+    const uint32_t blur_size   = blur_radius * 2 + 1;
+    const size_t weights_bytes = blur_size * blur_size * sizeof(float);
+
+    auto *weights = static_cast<float *>(malloc(weights_bytes));
+    calculate_gaussian_weights(blur_radius, sigma, weights);
+
+    #ifdef GAUSSIAN_NAIVE
+    if (g_device_weights == nullptr)
+        CUDA_THROW_IF_FAILED(cudaMalloc(&g_device_weights, weights_bytes));
+    CUDA_THROW_IF_FAILED(cudaMemcpy(g_device_weights, weights, weights_bytes, cudaMemcpyHostToDevice));
+    #endif
+    #ifdef GAUSSIAN_SHARED
+    CUDA_THROW_IF_FAILED(cudaMemcpyToSymbol(device_weights, weights, weights_bytes));
+    #endif
+
+    free(weights);
+}
+
+void gaussian_launch(
+    const uint8_t *d_src,
+    uint8_t *d_dst,
+    int32_t width,
+    int32_t height,
+    cudaStream_t stream)
+{
+    dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid_dim(static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+                  static_cast<uint32_t>(std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+
+    #ifdef GAUSSIAN_NAIVE
+    gaussian_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, g_device_weights, BLUR_RADIUS, d_dst);
+    #endif
+    #ifdef GAUSSIAN_SHARED
+    gaussian_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, d_dst);
+    #endif
+}
+
+#endif // #ifdef PIPELINE_FUSED

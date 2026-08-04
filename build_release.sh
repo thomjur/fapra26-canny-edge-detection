@@ -16,8 +16,7 @@
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory
-#   NMS_OPT=2       opt version without shared memory
-#   NMS_OPT=3       opt version with pinned memory shared memory
+#   NMS_OPT=2       pinned memory
 #
 #   HYSTERESIS_OPT=0       naive         (default)
 #   HYSTERESIS_OPT=1       shared memory
@@ -29,11 +28,16 @@
 BIN_DIR="bin"
 BINARY="$BIN_DIR/canny_release.out"
 GAUSSIAN_OPT="${GAUSSIAN_OPT:-2}"
-SOBEL_OPT="${SOBEL_OPT:-3}"
+SOBEL_OPT="${SOBEL_OPT:-4}"
 NMS_OPT="${NMS_OPT:-1}"
-HYSTERESIS_OPT="${HYSTERESIS_OPT:-0}"
+HYSTERESIS_OPT="${HYSTERESIS_OPT:-2}"
 WARMUP="${WARMUP:-0}"
 ARCH="sm_75"
+
+# fused end-to-end pipeline benchmark (single H2D/D2H, no host sync between
+# stages) -- must be defined for EVERY translation unit, since each .cu file
+# is preprocessed independently and doesn't see main.cu's defines
+FUSED_FLAG="-DPIPELINE_FUSED"
 
 mkdir -p "$BIN_DIR"
 
@@ -47,35 +51,35 @@ fi
 # compile each translation unit separately
 nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
   --generate-line-info \
-  -DGAUSSIAN_OPT=$GAUSSIAN_OPT -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT $WARMUP_FLAG \
+  -DGAUSSIAN_OPT=$GAUSSIAN_OPT -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT $WARMUP_FLAG $FUSED_FLAG \
   -c -o "$BIN_DIR/main.o" src/main.cu
 
 if [ $? -ne 0 ]; then echo "Failed: main.cu"; exit 1; fi
 
 nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
   --generate-line-info \
-  -DGAUSSIAN_OPT=$GAUSSIAN_OPT \
+  -DGAUSSIAN_OPT=$GAUSSIAN_OPT $FUSED_FLAG \
   -c -o "$BIN_DIR/gaussian.o" src/gaussian.cu
 
 if [ $? -ne 0 ]; then echo "Failed: gaussian.cu"; exit 1; fi
 
 nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
   --generate-line-info \
-  -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT \
+  -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT $FUSED_FLAG \
   -c -o "$BIN_DIR/sobel.o" src/sobel.cu
 
 if [ $? -ne 0 ]; then echo "Failed: sobel.cu"; exit 1; fi
 
 nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
   --generate-line-info \
-  -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT \
+  -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT $FUSED_FLAG \
   -c -o "$BIN_DIR/nms.o" src/nms.cu
 
 if [ $? -ne 0 ]; then echo "Failed: nms.cu"; exit 1; fi
 
 nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
   --generate-line-info \
-  -DHYSTERESIS_OPT=$HYSTERESIS_OPT \
+  -DHYSTERESIS_OPT=$HYSTERESIS_OPT $FUSED_FLAG \
   -c -o "$BIN_DIR/hysteresis.o" src/hysteresis.cu
 
 if [ $? -ne 0 ]; then echo "Failed: hysteresis.cu"; exit 1; fi
