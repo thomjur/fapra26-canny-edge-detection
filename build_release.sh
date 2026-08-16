@@ -24,6 +24,9 @@
 #
 #   WARMUP=1        warm-up run enabled   (default)
 #   WARMUP=0        warm-up run disabled
+#
+#   PIPELINE_FUSED=1  fused pipeline enabled (default)
+#   PIPELINE_FUSED=0  fused pipeline disabled
 
 BIN_DIR="bin"
 BINARY="$BIN_DIR/canny_release.out"
@@ -32,16 +35,20 @@ SOBEL_OPT="${SOBEL_OPT:-4}"
 NMS_OPT="${NMS_OPT:-1}"
 HYSTERESIS_OPT="${HYSTERESIS_OPT:-2}"
 WARMUP="${WARMUP:-0}"
+PIPELINE_FUSED="${PIPELINE_FUSED:-1}"
 ARCH="sm_75"
 
 # fused end-to-end pipeline benchmark (single H2D/D2H, no host sync between
 # stages) -- must be defined for EVERY translation unit, since each .cu file
 # is preprocessed independently and doesn't see main.cu's defines
-FUSED_FLAG="-DPIPELINE_FUSED"
+FUSED_FLAG=""
+if [ "$PIPELINE_FUSED" -eq 1 ]; then
+  FUSED_FLAG="-DPIPELINE_FUSED"
+fi
 
 mkdir -p "$BIN_DIR"
 
-echo "[release] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, HYSTERESIS_OPT=$HYSTERESIS_OPT, WARMUP=$WARMUP ..."
+echo "[release] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, HYSTERESIS_OPT=$HYSTERESIS_OPT, WARMUP=$WARMUP, PIPELINE_FUSED=$PIPELINE_FUSED ..."
 
 WARMUP_FLAG=""
 if [ "$WARMUP" -eq 1 ]; then

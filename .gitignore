@@ -1,3 +1,4 @@
 bin/
 .idea/
 *.ncu-rep
+gpu_specs
