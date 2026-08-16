@@ -13,6 +13,7 @@
 #   SOBEL_OPT=2     optimized version
 #   SOBEL_OPT=3     optimized version + pinned memory
 #   SOBEL_OPT=4     optimized bucket version
+#   SOBEL_OPT=5     split Gx/Gy bucket version
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory

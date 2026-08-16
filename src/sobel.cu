@@ -53,6 +53,10 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width, int32_t height
     uint8_t *device_src;           // input image
     uint8_t *device_gradient;      // gradient magnitude
     sobel_dir_t *device_direction; // gradient direction (radians or bucket)
+#ifdef SOBEL_SPLIT
+    int16_t *device_gx = nullptr;
+    int16_t *device_gy = nullptr;
+#endif
 
     // host output buffers
     uint8_t *host_gradient      = nullptr;
@@ -72,6 +76,11 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width, int32_t height
     CUDA_THROW_IF_FAILED(cudaMalloc(&device_gradient, img_size));
     CUDA_THROW_IF_FAILED(cudaMalloc(&device_direction, dir_size));
     CUDA_THROW_IF_FAILED(cudaMemset(device_gradient, 0, img_size));
+#ifdef SOBEL_SPLIT
+    const size_t component_size = static_cast<size_t>(width) * static_cast<size_t>(height) * sizeof(int16_t);
+    CUDA_THROW_IF_FAILED(cudaMalloc(&device_gx, component_size));
+    CUDA_THROW_IF_FAILED(cudaMalloc(&device_gy, component_size));
+#endif
 
     cudaEvent_t t0, t1, t2, t3;
     CUDA_THROW_IF_FAILED(cudaEventCreate(&t0));
@@ -85,7 +94,12 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width, int32_t height
     cudaEventRecord(t1);
 
     // kernel
-#if defined(SOBEL_NAIVE)
+#if defined(SOBEL_SPLIT)
+    split_sobel_x_filter<<<grid_dim, block_dim>>>(device_src, width, height, device_gx);
+    split_sobel_y_filter<<<grid_dim, block_dim>>>(device_src, width, height, device_gy);
+    split_sobel_combine_filter<<<grid_dim, block_dim>>>(device_gx, device_gy, width, height, device_gradient,
+                                                        device_direction);
+#elif defined(SOBEL_NAIVE)
     naive_sobel_filter<<<grid_dim, block_dim>>>(device_src, width, height, device_gradient, device_direction);
 #elif defined(SOBEL_SHARED)
     sharedm_sobel_filter<<<grid_dim, block_dim>>>(device_src, width, height, device_gradient, device_direction);
@@ -123,6 +137,10 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width, int32_t height
     CUDA_THROW_IF_FAILED(cudaFree(device_src));
     CUDA_THROW_IF_FAILED(cudaFree(device_gradient));
     CUDA_THROW_IF_FAILED(cudaFree(device_direction));
+#ifdef SOBEL_SPLIT
+    CUDA_THROW_IF_FAILED(cudaFree(device_gx));
+    CUDA_THROW_IF_FAILED(cudaFree(device_gy));
+#endif
 
     return result;
 }
@@ -443,6 +461,122 @@ __global__ void bucket_sobel_filter(
     out_dir_buffer[y * width + x] = bucket;
 }
 
+#ifdef SOBEL_SPLIT
+
+/**
+ * @brief Computes the horizontal Sobel component into an int16 buffer.
+ *
+ * This is intentionally a separate kernel from split_sobel_y_filter so the
+ * split implementation can be benchmarked against the combined kernel.
+ */
+__global__ void split_sobel_x_filter(
+    const uint8_t *src_buffer,
+    const int32_t width,
+    const int32_t height,
+    int16_t *out_gx_buffer)
+{
+    const int32_t x = static_cast<int32_t>(blockIdx.x * blockDim.x + threadIdx.x);
+    const int32_t y = static_cast<int32_t>(blockIdx.y * blockDim.y + threadIdx.y);
+
+    if (x >= width || y >= height)
+        return;
+
+    const size_t index = static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x);
+    if (x == 0 || x == width - 1 || y == 0 || y == height - 1)
+    {
+        out_gx_buffer[index] = 0;
+        return;
+    }
+
+    const uint8_t *r0 = src_buffer + (y - 1) * width + (x - 1);
+    const uint8_t *r1 = r0 + width;
+    const uint8_t *r2 = r1 + width;
+
+    const int gx = -r0[0] + r0[2] - (r1[0] << 1) + (r1[2] << 1) - r2[0] + r2[2];
+    out_gx_buffer[index] = static_cast<int16_t>(gx);
+}
+
+/**
+ * @brief Computes the vertical Sobel component into an int16 buffer.
+ */
+__global__ void split_sobel_y_filter(
+    const uint8_t *src_buffer,
+    const int32_t width,
+    const int32_t height,
+    int16_t *out_gy_buffer)
+{
+    const int32_t x = static_cast<int32_t>(blockIdx.x * blockDim.x + threadIdx.x);
+    const int32_t y = static_cast<int32_t>(blockIdx.y * blockDim.y + threadIdx.y);
+
+    if (x >= width || y >= height)
+        return;
+
+    const size_t index = static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x);
+    if (x == 0 || x == width - 1 || y == 0 || y == height - 1)
+    {
+        out_gy_buffer[index] = 0;
+        return;
+    }
+
+    const uint8_t *r0 = src_buffer + (y - 1) * width + (x - 1);
+    const uint8_t *r1 = r0 + width;
+    const uint8_t *r2 = r1 + width;
+
+    const int gy = -r0[0] - (r0[1] << 1) - r0[2] + r2[0] + (r2[1] << 1) + r2[2];
+    out_gy_buffer[index] = static_cast<int16_t>(gy);
+}
+
+/**
+ * @brief Combines split Gx/Gy components into the bucket-mode outputs.
+ */
+__global__ void split_sobel_combine_filter(
+    const int16_t *gx_buffer,
+    const int16_t *gy_buffer,
+    const int32_t width,
+    const int32_t height,
+    uint8_t *out_grad_buffer,
+    uint8_t *out_dir_buffer)
+{
+    const int32_t x = static_cast<int32_t>(blockIdx.x * blockDim.x + threadIdx.x);
+    const int32_t y = static_cast<int32_t>(blockIdx.y * blockDim.y + threadIdx.y);
+
+    if (x >= width || y >= height)
+        return;
+
+    const size_t index = static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x);
+    if (x == 0 || x == width - 1 || y == 0 || y == height - 1)
+    {
+        out_grad_buffer[index] = 0;
+        out_dir_buffer[index] = 0;
+        return;
+    }
+
+    const int gx = static_cast<int>(gx_buffer[index]);
+    const int gy = static_cast<int>(gy_buffer[index]);
+    const float abs_gx = fabsf(static_cast<float>(gx));
+    const float abs_gy = fabsf(static_cast<float>(gy));
+
+    const float gradient = fminf(255.0f, abs_gx + abs_gy);
+    out_grad_buffer[index] = static_cast<uint8_t>(gradient);
+
+    constexpr float TAN_22_5 = 0.414213562f;
+    constexpr float TAN_67_5 = 2.414213562f;
+
+    uint8_t bucket;
+    if (abs_gy < TAN_22_5 * abs_gx)
+        bucket = 0; // 0 degrees
+    else if (abs_gy > TAN_67_5 * abs_gx)
+        bucket = 2; // 90 degrees
+    else if ((gx > 0) == (gy > 0))
+        bucket = 1; // 45 degrees
+    else
+        bucket = 3; // 135 degrees
+
+    out_dir_buffer[index] = bucket;
+}
+
+#endif // SOBEL_SPLIT
+
 //
 // FUSED PIPELINE SUPPORT
 //
@@ -455,6 +589,8 @@ void sobel_launch(
     sobel_dir_t *d_dir,
     int32_t width,
     int32_t height,
+    int16_t *d_gx,
+    int16_t *d_gy,
     cudaStream_t stream)
 {
     // same block layout logic as sobel_execute(): SOBEL_SHARED uses a
@@ -469,7 +605,11 @@ void sobel_launch(
                   static_cast<uint32_t>(std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
     #endif
 
-    #if defined(SOBEL_NAIVE)
+    #if defined(SOBEL_SPLIT)
+    split_sobel_x_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, d_gx);
+    split_sobel_y_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, d_gy);
+    split_sobel_combine_filter<<<grid_dim, block_dim, 0, stream>>>(d_gx, d_gy, width, height, d_grad, d_dir);
+    #elif defined(SOBEL_NAIVE)
     naive_sobel_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, d_grad, d_dir);
     #elif defined(SOBEL_SHARED)
     sharedm_sobel_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, d_grad, d_dir);
