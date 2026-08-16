@@ -114,3 +114,29 @@ __global__ void gaussian_filter(
     const int32_t height,
     uint8_t *out_dst_buffer);
 #endif // #ifdef GAUSSIAN_SHARED
+
+#ifdef PIPELINE_FUSED
+//
+// FUSED PIPELINE SUPPORT
+//
+// Lean variants without cudaMemcpy, for end-to-end pipeline timing.
+// Buffers already live on the device; no host sync between stages.
+//
+
+/// @brief Uploads gaussian weights to the device once (constant or global
+///        memory, depending on GAUSSIAN_OPT). Must run before the first
+///        gaussian_launch() call; re-run only on sigma/radius change.
+///        Not part of the actual kernel measurement (setup cost).
+void gaussian_prepare_weights(uint32_t blur_radius, float sigma);
+
+/// @brief Launches only the gaussian kernel — no cudaMalloc/cudaMemcpy/cudaFree.
+///        For the fused pipeline: d_src/d_dst must already be on the device
+///        (allocated by caller). Requires prior gaussian_prepare_weights() call.
+void gaussian_launch(
+    const uint8_t *d_src,
+    uint8_t *d_dst,
+    int32_t width,
+    int32_t height,
+    cudaStream_t stream = 0);
+
+#endif // #ifdef PIPELINE_FUSED

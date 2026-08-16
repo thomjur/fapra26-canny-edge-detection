@@ -442,3 +442,43 @@ __global__ void bucket_sobel_filter(
 
     out_dir_buffer[y * width + x] = bucket;
 }
+
+//
+// FUSED PIPELINE SUPPORT
+//
+
+#ifdef PIPELINE_FUSED
+
+void sobel_launch(
+    const uint8_t *d_src,
+    uint8_t *d_grad,
+    sobel_dir_t *d_dir,
+    int32_t width,
+    int32_t height,
+    cudaStream_t stream)
+{
+    // same block layout logic as sobel_execute(): SOBEL_SHARED uses a
+    // 32x8 block, all others a square BLOCK_SIZE x BLOCK_SIZE block
+    #ifdef SOBEL_SHARED
+    dim3 block_dim(BLOCK_SIZE_X, BLOCK_SIZE_Y);
+    dim3 grid_dim(static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE_X)),
+                  static_cast<uint32_t>(std::ceil(static_cast<float>(height) / BLOCK_SIZE_Y)));
+    #else
+    dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid_dim(static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+                  static_cast<uint32_t>(std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+    #endif
+
+    #if defined(SOBEL_NAIVE)
+    naive_sobel_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, d_grad, d_dir);
+    #elif defined(SOBEL_SHARED)
+    sharedm_sobel_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, d_grad, d_dir);
+    #elif defined(SOBEL_BUCKET)
+    bucket_sobel_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, d_grad, d_dir);
+    #elif defined(SOBEL_OPTIMIZED) || defined(SOBEL_PINNED)
+    // pinned reuses the optimized kernel, it only differs in host allocation
+    optimized_sobel_filter<<<grid_dim, block_dim, 0, stream>>>(d_src, width, height, d_grad, d_dir);
+    #endif
+}
+
+#endif // #ifdef PIPELINE_FUSED

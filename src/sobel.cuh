@@ -150,3 +150,27 @@ SobelResult sobel_execute(const uint8_t *host_src, int32_t width, int32_t height
  *              After cleanup, host_grad and host_dir are set to nullptr.
  */
 void sobel_cleanup(SobelResult &result);
+
+//
+// >>> FUSED PIPELINE SUPPORT <<<
+//
+
+#ifdef PIPELINE_FUSED
+
+/// @brief Launches only the sobel kernel — no cudaMalloc/cudaMemcpy/cudaFree.
+///        For the fused pipeline: d_src/d_grad/d_dir must already be on the
+///        device (allocated by caller).
+///
+/// @param d_src   Input image, already on device.
+/// @param d_grad  Output gradient magnitude buffer, already on device.
+/// @param d_dir   Output direction buffer, already on device.
+///                Type is sobel_dir_t (uint8_t for SOBEL_BUCKET, float otherwise).
+void sobel_launch(
+    const uint8_t *d_src,
+    uint8_t *d_grad,
+    sobel_dir_t *d_dir,
+    int32_t width,
+    int32_t height,
+    cudaStream_t stream = 0);
+
+#endif // #ifdef PIPELINE_FUSED

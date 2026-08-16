@@ -9,7 +9,7 @@
 #include "common.cuh"
 
 //
-// >>> NON-MAXIMUM SUPPRESSION <
+// >>> NON-MAXIMUM SUPPRESSION <<<
 //
 // Kernel variants are selected at compile time along two independent axes:
 //   NMS_NAIVE / NMS_SHARED  -> memory access pattern
@@ -378,3 +378,43 @@ __global__ void non_maximum_suppression_shared_bucket(
 }
 
 #endif // NMS_SHARED && NMS_BUCKET
+
+//
+// FUSED PIPELINE SUPPORT
+//
+
+#ifdef PIPELINE_FUSED
+
+void nms_launch(
+    const uint8_t *d_magnitude,
+    const nms_dir_t *d_direction,
+    int32_t width,
+    int32_t height,
+    uint8_t *d_nms,
+    cudaStream_t stream)
+{
+    // same block/grid layout as nms_execute() -- NMS uses a plain
+    // BLOCK_SIZE x BLOCK_SIZE block for every variant, no special case
+    dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+    dim3 grid_dim(static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+                  static_cast<uint32_t>(std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+
+    #if defined(NMS_NAIVE)
+    #ifdef NMS_BUCKET
+    non_maximum_suppression_bucket<<<grid_dim, block_dim, 0, stream>>>(d_magnitude, d_direction, width, height,
+                                                                       d_nms);
+    #else
+    non_maximum_suppression<<<grid_dim, block_dim, 0, stream>>>(d_magnitude, d_direction, width, height, d_nms);
+    #endif
+    #elif defined(NMS_SHARED) // also covers NMS_PINNED
+    #ifdef NMS_BUCKET
+    non_maximum_suppression_shared_bucket<<<grid_dim, block_dim, 0, stream>>>(d_magnitude, d_direction, width,
+                                                                              height, d_nms);
+    #else
+    non_maximum_suppression_shared<<<grid_dim, block_dim, 0, stream>>>(d_magnitude, d_direction, width, height,
+                                                                       d_nms);
+    #endif
+    #endif
+}
+
+#endif // #ifdef PIPELINE_FUSED
