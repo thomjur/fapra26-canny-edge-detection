@@ -28,6 +28,8 @@
 #
 #   PIPELINE_FUSED=1  fused pipeline enabled (default)
 #   PIPELINE_FUSED=0  fused pipeline disabled
+#
+#   BENCHMARK_RUNS=n  number of measured runs (default: 1)
 
 BIN_DIR="bin"
 BINARY="$BIN_DIR/canny_release.out"
@@ -37,6 +39,7 @@ NMS_OPT="${NMS_OPT:-1}"
 HYSTERESIS_OPT="${HYSTERESIS_OPT:-2}"
 WARMUP="${WARMUP:-0}"
 PIPELINE_FUSED="${PIPELINE_FUSED:-1}"
+BENCHMARK_RUNS="${BENCHMARK_RUNS:-1}"
 ARCH="sm_75"
 
 # fused end-to-end pipeline benchmark (single H2D/D2H, no host sync between
@@ -49,7 +52,7 @@ fi
 
 mkdir -p "$BIN_DIR"
 
-echo "[release] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, HYSTERESIS_OPT=$HYSTERESIS_OPT, WARMUP=$WARMUP, PIPELINE_FUSED=$PIPELINE_FUSED ..."
+echo "[release] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, HYSTERESIS_OPT=$HYSTERESIS_OPT, WARMUP=$WARMUP, PIPELINE_FUSED=$PIPELINE_FUSED, BENCHMARK_RUNS=$BENCHMARK_RUNS ..."
 
 WARMUP_FLAG=""
 if [ "$WARMUP" -eq 1 ]; then
@@ -59,7 +62,7 @@ fi
 # compile each translation unit separately
 nvcc -rdc=true -O3 --use_fast_math -std=c++20 -arch=$ARCH \
   --generate-line-info \
-  -DGAUSSIAN_OPT=$GAUSSIAN_OPT -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT $WARMUP_FLAG $FUSED_FLAG \
+  -DGAUSSIAN_OPT=$GAUSSIAN_OPT -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT -DBENCHMARK_RUNS=$BENCHMARK_RUNS $WARMUP_FLAG $FUSED_FLAG \
   -c -o "$BIN_DIR/main.o" src/main.cu
 
 if [ $? -ne 0 ]; then echo "Failed: main.cu"; exit 1; fi

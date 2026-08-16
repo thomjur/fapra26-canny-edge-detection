@@ -34,8 +34,10 @@
 //         - two thresholds (high/low) to determine real edges
 //
 
-// 200 runs for stable avg — reduce to ~10 when profiling with NCU
+// Number of measured runs; can be overridden with -DBENCHMARK_RUNS=n.
+#ifndef BENCHMARK_RUNS
 #define BENCHMARK_RUNS 1
+#endif
 //#define WARMUP
 
 int main(int argc, const char **argv)
