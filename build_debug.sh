@@ -13,6 +13,7 @@
 #   SOBEL_OPT=2     optimized version
 #   SOBEL_OPT=3     optimized version + pinned memory
 #   SOBEL_OPT=4     optimized bucket version
+#   SOBEL_OPT=5     split Gx/Gy bucket version
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory
@@ -24,6 +25,11 @@
 #
 #   WARMUP=1        warm-up run enabled   (default)
 #   WARMUP=0        warm-up run disabled
+#
+#   PIPELINE_FUSED=1  fused pipeline enabled (default)
+#   PIPELINE_FUSED=0  fused pipeline disabled
+#
+#   BENCHMARK_RUNS=n  number of measured runs (default: 1)
 
 BIN_DIR="bin"
 BINARY="$BIN_DIR/canny_debug.out"
@@ -32,16 +38,21 @@ SOBEL_OPT="${SOBEL_OPT:-1}"
 NMS_OPT="${NMS_OPT:-1}"
 HYSTERESIS_OPT="${HYSTERESIS_OPT:-0}"
 WARMUP="${WARMUP:-1}"
+PIPELINE_FUSED="${PIPELINE_FUSED:-1}"
+BENCHMARK_RUNS="${BENCHMARK_RUNS:-1}"
 ARCH="sm_75"
 
 # fused end-to-end pipeline benchmark (single H2D/D2H, no host sync between
 # stages) -- must be defined for EVERY translation unit, since each .cu file
 # is preprocessed independently and doesn't see main.cu's defines
-FUSED_FLAG="-DPIPELINE_FUSED"
+FUSED_FLAG=""
+if [ "$PIPELINE_FUSED" -eq 1 ]; then
+  FUSED_FLAG="-DPIPELINE_FUSED"
+fi
 
 mkdir -p "$BIN_DIR"
 
-echo "[debug] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, HYSTERESIS_OPT=$HYSTERESIS_OPT, WARMUP=$WARMUP ..."
+echo "[debug] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, HYSTERESIS_OPT=$HYSTERESIS_OPT, WARMUP=$WARMUP, PIPELINE_FUSED=$PIPELINE_FUSED, BENCHMARK_RUNS=$BENCHMARK_RUNS ..."
 
 WARMUP_FLAG=""
 if [ "$WARMUP" -eq 1 ]; then
@@ -51,7 +62,7 @@ fi
 # compile each translation unit separately
 nvcc -rdc=true -O0 -std=c++20 -arch=$ARCH \
   -g -G --generate-line-info \
-  -DGAUSSIAN_OPT=$GAUSSIAN_OPT -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT $WARMUP_FLAG $FUSED_FLAG \
+  -DGAUSSIAN_OPT=$GAUSSIAN_OPT -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT -DBENCHMARK_RUNS=$BENCHMARK_RUNS $WARMUP_FLAG $FUSED_FLAG \
   -c -o "$BIN_DIR/main.o" src/main.cu
 
 if [ $? -ne 0 ]; then echo "Failed: main.cu"; exit 1; fi

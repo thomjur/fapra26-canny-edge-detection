@@ -19,8 +19,11 @@
     #define SOBEL_PINNED
 #elif SOBEL_OPT == 4
     #define SOBEL_BUCKET
+#elif SOBEL_OPT == 5
+    #define SOBEL_SPLIT
+    #define SOBEL_BUCKET
 #else
-    #error "SOBEL_OPT must be 0, 1, 2, 3 or 4"
+    #error "SOBEL_OPT must be 0, 1, 2, 3, 4 or 5"
 #endif
 
 #ifdef SOBEL_BUCKET
@@ -111,6 +114,37 @@ __global__ void bucket_sobel_filter(
     uint8_t *out_grad_buffer,
     uint8_t *out_dir_buffer);
 
+#ifdef SOBEL_SPLIT
+/**
+ * @brief Computes only the horizontal Sobel component for each pixel.
+ */
+__global__ void split_sobel_x_filter(
+    const uint8_t *src_buffer,
+    const int32_t width,
+    const int32_t height,
+    int16_t *out_gx_buffer);
+
+/**
+ * @brief Computes only the vertical Sobel component for each pixel.
+ */
+__global__ void split_sobel_y_filter(
+    const uint8_t *src_buffer,
+    const int32_t width,
+    const int32_t height,
+    int16_t *out_gy_buffer);
+
+/**
+ * @brief Combines split Sobel components into magnitude and direction buckets.
+ */
+__global__ void split_sobel_combine_filter(
+    const int16_t *gx_buffer,
+    const int16_t *gy_buffer,
+    const int32_t width,
+    const int32_t height,
+    uint8_t *out_grad_buffer,
+    uint8_t *out_dir_buffer);
+#endif
+
 /**
  * @struct SobelResult
  * @brief Holds the gradient and direction images from sobel_execute().
@@ -165,12 +199,16 @@ void sobel_cleanup(SobelResult &result);
 /// @param d_grad  Output gradient magnitude buffer, already on device.
 /// @param d_dir   Output direction buffer, already on device.
 ///                Type is sobel_dir_t (uint8_t for SOBEL_BUCKET, float otherwise).
+/// @param d_gx    Temporary Gx buffer, required by SOBEL_SPLIT.
+/// @param d_gy    Temporary Gy buffer, required by SOBEL_SPLIT.
 void sobel_launch(
     const uint8_t *d_src,
     uint8_t *d_grad,
     sobel_dir_t *d_dir,
     int32_t width,
     int32_t height,
+    int16_t *d_gx = nullptr,
+    int16_t *d_gy = nullptr,
     cudaStream_t stream = 0);
 
 #endif // #ifdef PIPELINE_FUSED

@@ -34,8 +34,10 @@
 //         - two thresholds (high/low) to determine real edges
 //
 
-// 200 runs for stable avg — reduce to ~10 when profiling with NCU
+// Number of measured runs; can be overridden with -DBENCHMARK_RUNS=n.
+#ifndef BENCHMARK_RUNS
 #define BENCHMARK_RUNS 1
+#endif
 //#define WARMUP
 
 int main(int argc, const char **argv)
@@ -239,12 +241,19 @@ int main(int argc, const char **argv)
         // device buffers for the whole chain -- allocated once, reused every run
         uint8_t *d_src, *d_gaussian, *d_grad, *d_nms, *d_hysteresis;
         sobel_dir_t *d_dir;
+        int16_t *d_sobel_gx = nullptr;
+        int16_t *d_sobel_gy = nullptr;
         CUDA_THROW_IF_FAILED(cudaMalloc(&d_src, img_size));
         CUDA_THROW_IF_FAILED(cudaMalloc(&d_gaussian, img_size));
         CUDA_THROW_IF_FAILED(cudaMalloc(&d_grad, img_size));
         CUDA_THROW_IF_FAILED(cudaMalloc(&d_dir, dir_size));
         CUDA_THROW_IF_FAILED(cudaMalloc(&d_nms, img_size));
         CUDA_THROW_IF_FAILED(cudaMalloc(&d_hysteresis, img_size));
+#ifdef SOBEL_SPLIT
+        const size_t sobel_component_size = img_size * sizeof(int16_t);
+        CUDA_THROW_IF_FAILED(cudaMalloc(&d_sobel_gx, sobel_component_size));
+        CUDA_THROW_IF_FAILED(cudaMalloc(&d_sobel_gy, sobel_component_size));
+#endif
 
         // pinned host output buffer -- the one spot where pinned memory still
         // pays off per Frau Odens Punkt: this is the single D2H at the end
@@ -264,7 +273,7 @@ int main(int argc, const char **argv)
             cudaEventRecord(f_start);
             CUDA_THROW_IF_FAILED(cudaMemcpyAsync(d_src, host_src, img_size, cudaMemcpyHostToDevice));
             gaussian_launch(d_src, d_gaussian, width, height);
-            sobel_launch(d_gaussian, d_grad, d_dir, width, height);
+            sobel_launch(d_gaussian, d_grad, d_dir, width, height, d_sobel_gx, d_sobel_gy);
             nms_launch(d_grad, d_dir, width, height, d_nms);
             hysteresis_launch(d_nms, d_hysteresis, width, height);
             CUDA_THROW_IF_FAILED(cudaMemcpyAsync(host_out, d_hysteresis, img_size, cudaMemcpyDeviceToHost));
@@ -285,7 +294,7 @@ int main(int argc, const char **argv)
 
             CUDA_THROW_IF_FAILED(cudaMemcpyAsync(d_src, host_src, img_size, cudaMemcpyHostToDevice));
             gaussian_launch(d_src, d_gaussian, width, height);
-            sobel_launch(d_gaussian, d_grad, d_dir, width, height);
+            sobel_launch(d_gaussian, d_grad, d_dir, width, height, d_sobel_gx, d_sobel_gy);
             nms_launch(d_grad, d_dir, width, height, d_nms);
             hysteresis_launch(d_nms, d_hysteresis, width, height);
             CUDA_THROW_IF_FAILED(cudaMemcpyAsync(host_out, d_hysteresis, img_size, cudaMemcpyDeviceToHost));
@@ -317,6 +326,10 @@ int main(int argc, const char **argv)
         CUDA_THROW_IF_FAILED(cudaFree(d_dir));
         CUDA_THROW_IF_FAILED(cudaFree(d_nms));
         CUDA_THROW_IF_FAILED(cudaFree(d_hysteresis));
+#ifdef SOBEL_SPLIT
+        CUDA_THROW_IF_FAILED(cudaFree(d_sobel_gx));
+        CUDA_THROW_IF_FAILED(cudaFree(d_sobel_gy));
+#endif
         CUDA_THROW_IF_FAILED(cudaFreeHost(host_out));
         cudaEventDestroy(f_start);
         cudaEventDestroy(f_stop);

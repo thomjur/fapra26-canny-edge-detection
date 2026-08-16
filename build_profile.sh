@@ -13,6 +13,7 @@
 #   SOBEL_OPT=2     optimized version
 #   SOBEL_OPT=3     optimized version + pinned memory
 #   SOBEL_OPT=4     optimized bucket version
+#   SOBEL_OPT=5     split Gx/Gy bucket version
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory
@@ -24,6 +25,8 @@
 #
 #   WARMUP=1        warm-up run enabled   (default)
 #   WARMUP=0        warm-up run disabled
+#
+#   BENCHMARK_RUNS=n  number of measured runs (default: 1)
 
 set -e
 
@@ -34,12 +37,13 @@ GAUSSIAN_OPT="${GAUSSIAN_OPT:-2}"
 SOBEL_OPT="${SOBEL_OPT:-1}"
 NMS_OPT="${NMS_OPT:-1}"
 WARMUP="${WARMUP:-1}"
+BENCHMARK_RUNS="${BENCHMARK_RUNS:-1}"
 
 ARCH="sm_75"
 
 mkdir -p "$BIN_DIR"
 
-echo "[profile] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, WARMUP=$WARMUP ..."
+echo "[profile] Compiling with GAUSSIAN_OPT=$GAUSSIAN_OPT, SOBEL_OPT=$SOBEL_OPT, NMS_OPT=$NMS_OPT, WARMUP=$WARMUP, BENCHMARK_RUNS=$BENCHMARK_RUNS ..."
 
 WARMUP_FLAG=""
 if [ "$WARMUP" -eq 1 ]; then
@@ -47,7 +51,7 @@ if [ "$WARMUP" -eq 1 ]; then
 fi
 
 COMMON_FLAGS="-rdc=true -O3 -std=c++20 -arch=$ARCH -lineinfo"
-DEFINES="-DGAUSSIAN_OPT=$GAUSSIAN_OPT -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT $WARMUP_FLAG"
+DEFINES="-DGAUSSIAN_OPT=$GAUSSIAN_OPT -DSOBEL_OPT=$SOBEL_OPT -DNMS_OPT=$NMS_OPT -DBENCHMARK_RUNS=$BENCHMARK_RUNS $WARMUP_FLAG"
 
 nvcc $COMMON_FLAGS $DEFINES \
   -c -o "$BIN_DIR/main.profile.o" src/main.cu
