@@ -332,15 +332,30 @@ __global__ void hysteresis_opt(uint8_t *src, const int32_t width,
   else if (p >= low_t) {
     uint8_t max_n = 0;
 
-    // Check 8-neighborhood from shared memory
-    max_n = max(max_n, src[(y - 1) * width + x - 1]);
-    max_n = max(max_n, src[(y - 1) * width + x]);
-    max_n = max(max_n, src[(y - 1) * width + x + 1]);
-    max_n = max(max_n, src[y * width + x - 1]);
-    max_n = max(max_n, src[y * width + x + 1]);
-    max_n = max(max_n, src[(y + 1) * width + x - 1]);
-    max_n = max(max_n, src[(y + 1) * width + x]);
-    max_n = max(max_n, src[(y + 1) * width + x + 1]);
+    if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+      // Fast path for interior pixels: unrolled 8-neighborhood loads.
+      max_n = max(max_n, src[(y - 1) * width + x - 1]);
+      max_n = max(max_n, src[(y - 1) * width + x]);
+      max_n = max(max_n, src[(y - 1) * width + x + 1]);
+      max_n = max(max_n, src[y * width + x - 1]);
+      max_n = max(max_n, src[y * width + x + 1]);
+      max_n = max(max_n, src[(y + 1) * width + x - 1]);
+      max_n = max(max_n, src[(y + 1) * width + x]);
+      max_n = max(max_n, src[(y + 1) * width + x + 1]);
+    } else {
+      // Border pixels need explicit bounds checks to avoid invalid accesses.
+      for (int dy = -1; dy <= 1; ++dy) {
+        for (int dx = -1; dx <= 1; ++dx) {
+          if (dx == 0 && dy == 0)
+            continue;
+
+          const int nx = x + dx;
+          const int ny = y + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height)
+            max_n = max(max_n, src[ny * width + nx]);
+        }
+      }
+    }
 
     out = (max_n >= high_t) ? 255 : 0;
   }
