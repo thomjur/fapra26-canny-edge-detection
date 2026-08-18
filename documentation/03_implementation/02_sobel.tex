@@ -1,2 +1,133 @@
 \subsection{Schritt 2: Sobel}
 \label{sec:impl_sobel}
+
+Die Sobel-Stufe erhält das geglättete Graustufenbild aus dem Gaussian Blur und
+berechnet für jedes Pixel den horizontalen und vertikalen Gradienten. Dazu wird
+ein zweidimensionales CUDA-Grid verwendet, wobei jeder Thread grundsätzlich für
+ein Bildpixel zuständig ist. Die Randpixel werden nicht mit einem unvollständigen
+$3 \times 3$-Fenster verarbeitet. Die Ausgaben der Stufe sind der
+Gradientenbetrag sowie die Gradientenrichtung, die anschließend von der
+Non-Maximum Suppression verwendet werden.
+
+\subsubsection{Naive Implementierung}
+
+Die naive Variante \texttt{naive\_sobel\_filter()} lädt für jedes innere Pixel
+seine $3 \times 3$-Nachbarschaft aus dem globalen Speicher. Die beiden
+Sobel-Filtermasken lauten
+\begin{equation}
+    G_x = \begin{pmatrix}
+        -1 & 0 & 1 \\
+        -2 & 0 & 2 \\
+        -1 & 0 & 1
+    \end{pmatrix}, \qquad
+    G_y = \begin{pmatrix}
+        -1 & -2 & -1 \\
+         0 &  0 &  0 \\
+         1 &  2 &  1
+    \end{pmatrix}.
+\end{equation}
+Für jedes Nachbarschaftspixel werden die Faltungen mit beiden Masken
+akkumuliert. Der Gradientenbetrag wird anschließend als
+\begin{equation}
+    M = \sqrt{G_x^2 + G_y^2}
+\end{equation}
+berechnet, auf den 8-Bit-Bereich $[0,255]$ begrenzt und als \texttt{uint8\_t}
+gespeichert. Die Richtung wird mit \texttt{atan2f($G_y$, $G_x$)} in Radiant
+bestimmt. Da ein Sobel-Filter für jeden Ausgabepixel dieselben Nachbarpixel wie
+mehrere Threads liest, entstehen bei dieser Variante viele redundante
+Global-Memory-Zugriffe.
+
+\begin{lstlisting}[style=cuda, basicstyle=\ttfamily\scriptsize,
+    caption={Kernschritte der naiven Sobel-Implementierung},
+    label={lst:sobel_naive}, numbers=left]
+int gx = 0, gy = 0;
+for (int i = -1; i <= 1; ++i) {
+    for (int j = -1; j <= 1; ++j) {
+        const uint8_t pixel = src_buffer[(y + i) * width + (x + j)];
+        gx += pixel * sobelX[i + 1][j + 1];
+        gy += pixel * sobelY[i + 1][j + 1];
+    }
+}
+
+float gradient = sqrtf(gx * gx + gy * gy);
+gradient = fminf(255.0f, fmaxf(0.0f, gradient));
+out_grad_buffer[y * width + x] = static_cast<uint8_t>(gradient);
+out_dir_buffer[y * width + x] = atan2f(float(gy), float(gx));
+\end{lstlisting}
+
+\subsubsection{Shared-Memory-Variante}
+\label{sec:shared_memory_sobel}
+
+Die Variante \texttt{sharedm\_sobel\_filter()} reduziert die redundanten
+Global-Memory-Zugriffe durch Tiling. Die Threads eines Blocks laden gemeinsam
+eine Bildkachel in den Shared Memory. Da der Sobel-Operator einen Radius von
+eins besitzt, wird die Kachel an jeder Seite um einen Pixel als Halo erweitert.
+Threads an den Blockgrenzen laden dabei die zusätzlichen Randpixel. Für
+Koordinaten außerhalb des Bildes wird Zero-Padding verwendet. Erst nach
+\texttt{\_\_syncthreads()} greifen die Threads auf die vollständige Kachel zu
+und führen die Faltung aus. Die mathematische Berechnung von Betrag und
+Richtung entspricht der naiven Variante.
+
+Für diese Variante wird ein anderes Blocklayout verwendet: Die Kacheln werden
+mit einem Block von \texttt{BLOCK\_SIZE\_X} $\times$ \texttt{BLOCK\_SIZE\_Y}
+Threads verarbeitet, während die übrigen Varianten quadratische Blöcke
+verwenden. Dadurch lässt sich das Ladeverhalten der Kachel unabhängig von der
+Berechnung untersuchen.
+
+\subsubsection{Arithmetische Optimierung}
+
+Da die Shared-Memory-Variante in den Messungen nicht automatisch schneller ist,
+verwendet \texttt{optimized\_sobel\_filter()} einen anderen Ansatz. Die
+Nachbarschaft wird über Zeiger auf die drei Bildzeilen adressiert und die
+Sobel-Faltung vollständig entrollt. Multiplikationen mit zwei werden dabei als
+Bitverschiebungen formuliert. Zusätzlich wird der Betrag durch die L1-Norm
+\begin{equation}
+    M_{\mathrm{L1}} = |G_x| + |G_y|
+\end{equation}
+angenähert. Diese Berechnung vermeidet die teure Quadratwurzel, ist aber nicht
+identisch zur euklidischen Sobel-Magnitude der naiven Variante. Die Richtung
+wird in dieser Variante weiterhin mit \texttt{atan2f()} bestimmt.
+
+Die Auswahl der Implementierung erfolgt zur Compile-Zeit über \texttt{SOBEL\_OPT}:
+Die Werte $0$ bis $3$ wählen die naive, Shared-Memory-, optimierte beziehungsweise
+optimierte Variante mit Page-locked Host-Speicher. Bei der Page-locked-Variante
+ändert sich der Kernel nicht; die Ausgabe-Puffer werden mit
+\texttt{cudaMallocHost()} angelegt, um DMA-Transfers zu ermöglichen.
+
+\subsubsection{Richtungs-Buckets}
+
+Die Variante \texttt{bucket\_sobel\_filter()} baut auf der entrollten
+Berechnung auf, vermeidet aber zusätzlich \texttt{atan2f()}. Für die
+Non-Maximum Suppression werden nur vier ungerichtete Achsen benötigt:
+$0^\circ$, $45^\circ$, $90^\circ$ und $135^\circ$. Anhand des Verhältnisses
+$|G_y|/|G_x|$ und des Vorzeichens der beiden Komponenten wird die Richtung
+direkt in einen Bucket mit dem Wert $0$ bis $3$ eingeordnet. Die Grenzwerte
+entsprechen den Tangenswerten von $22{,}5^\circ$ und $67{,}5^\circ$. Dadurch
+wird die Richtung statt als \texttt{float} als \texttt{uint8\_t} gespeichert,
+und die nachfolgende NMS kann die Quantisierung nicht erneut berechnen.
+
+Als letzte Sobel-Konfiguration werden die beiden Filterkomponenten separat
+berechnet. \texttt{split\_sobel\_x\_filter()} und
+\texttt{split\_sobel\_y\_filter()} schreiben $G_x$ und $G_y$ in temporäre
+\texttt{int16\_t}-Puffer. Ein dritter Kernel,
+\texttt{split\_sobel\_combine\_filter()}, berechnet daraus die L1-Magnitude
+und den Richtungs-Bucket. Diese Variante benötigt somit drei Kernelstarts und
+zusätzlichen Gerätespeicher, ermöglicht aber die getrennte Untersuchung der
+Gradientenkomponenten.
+
+\subsubsection{Host-seitiger Ablauf}
+
+\texttt{sobel\_execute()} übernimmt den Ablauf der isolierten Sobel-Stufe.
+Zunächst werden Eingabe-, Ausgabe- und gegebenenfalls temporäre Komponenten-
+Puffer auf der GPU angelegt. Danach wird das Bild per Host-to-Device-Kopie
+übertragen und die durch \texttt{SOBEL\_OPT} ausgewählte Kernel-Konfiguration
+gestartet. Anschließend werden Gradient und Richtung zurück auf den Host
+kopiert. CUDA-Events messen getrennt die Zeiten für H2D-Transfer,
+Kernel-Ausführung und D2H-Transfer. \texttt{sobel\_cleanup()} gibt die
+Host-Puffer wieder frei.
+
+Für die gefaltete Gesamtpipeline steht zusätzlich \texttt{sobel\_launch()}
+zur Verfügung. Diese Funktion führt nur den Kernelstart aus und übernimmt
+weder Speicherallokation noch Transfers. Dadurch können Gaussian Blur, Sobel,
+Non-Maximum Suppression und Hysteresis auf bereits allokierten Device-Puffern
+im selben CUDA-Stream verkettet werden.
