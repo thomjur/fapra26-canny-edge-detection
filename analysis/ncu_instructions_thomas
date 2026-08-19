@@ -1,0 +1,14 @@
+# Mit WARMUP=1 und BENCHMARK_RUNS=10 kompilieren
+sudo ncu --set full   -k regex:naive_sobel_filter   -s 0 -c 11 -f -o analysis/sobel_naive.ncu-rep   ./bin/canny_release.out   ./assets/maple-leaf-black-5120x2880.jpg   /tmp/sobel-profile.png
+
+Dann
+
+ncu --import analysis/sobel_naive.ncu-rep --csv > sobel_naive.csv
+
+Dann
+
+python3 src/parse_ncu.py sobel_naive.csv
+
+Für den Split Kernel:
+
+sudo ncu --set full   -k 'regex:split_sobel_(combine|x|y)_filter'   -s 0 -c 33 -f -o analysis/sobel_split.ncu-rep   ./bin/canny_release.out   ./assets/maple-leaf-black-5120x2880.jpg   /tmp/sobel-profile.png
