@@ -42,4 +42,13 @@ Warp Cycles Per Issued Instruction       |   10 |    19.92 |    20.35 |    20.13
 L1/TEX Hit Rate                          |   10 |    67.46 |    67.50 |    67.47 |    0.011
 L2 Hit Rate                              |   10 |    81.51 |    82.21 |    82.03 |    0.278
 
-
+CU Report: sobel_split.csv
+Metric                                   | Runs |      Min |      Max |      Avg |   StdDev
+------------------------------------------------------------------------------------------
+Compute (SM) Throughput                  |   32 |    36.10 |    50.52 |    45.46 |    6.670
+Memory Throughput                        |   64 |    49.44 |   603.44 |   222.21 |  199.244
+DRAM Throughput                          |   32 |    30.63 |    68.40 |    44.00 |   17.459
+Achieved Occupancy                       |   32 |    74.70 |    78.24 |    76.65 |    1.087
+Warp Cycles Per Issued Instruction       |   32 |    23.77 |    27.81 |    26.12 |    1.604
+L1/TEX Hit Rate                          |   32 |     1.57 |    67.70 |    43.77 |   30.983
+L2 Hit Rate                              |   32 |    43.47 |    76.88 |    65.26 |   15.881

@@ -24,9 +24,17 @@ def parse_ncu_csv(filepath):
                 continue
 
             metric = row.get("Metric Name", "").strip()
+            section = row.get("Section Name", "").strip()
+            unit = row.get("Metric Unit", "").strip()
             value_str = row.get("Metric Value", "").strip()
 
             if metric in METRICS and value_str:
+                # NCU reports Memory Throughput both as % and Gbyte/s.
+                if metric == "Memory Throughput" and (
+                    section != "GPU Speed Of Light Throughput" or unit != "%"
+                ):
+                    continue
+
                 try:
                     # NCU sometimes uses commas as thousand separators
                     value = float(value_str.replace(",", ""))
