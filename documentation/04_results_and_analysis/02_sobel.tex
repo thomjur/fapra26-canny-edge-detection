@@ -1,2 +1,134 @@
 \subsection{Schritt 2: Sobel}
 \label{sec:results_sobel}
+
+\subsubsection{Performance}
+
+Die folgende Auswertung verwendet
+die TJ-Messwerte aus dem Mittelwert von 200 Läufen. Der Warmup-Lauf wird
+nicht in den Vergleich einbezogen. Die vollständigen Messwerte sind in
+Anhang~\ref{app:sobel_results} aufgeführt.
+
+Betrachtet werden die Varianten \texttt{naive}, \texttt{shared},
+\texttt{split}, \texttt{pinned} und \texttt{bucket}. Die Variante
+\texttt{optimized} wird nicht zusätzlich aufgeführt, da \texttt{pinned} im
+Quellcode denselben \texttt{optimized\_sobel\_filter()}-Kernel verwendet.
+\texttt{pinned} ergänzt diesen Kernel lediglich einen locked Host-Buffer. Die \texttt{split} Variante enthält zusammengefasste Laufzeitwerte für alle drei Kernel.
+
+\begin{table}[H]
+    \centering
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabularx}{\textwidth}{l R R R R}
+        \toprule
+        Variante & H$\to$D [ms] & Kernel [ms] & D$\to$H [ms] & Gesamt [ms] \\
+        \midrule
+        naive  & 0.528 & 0.140 & 9.649 & 10.317 \\
+        shared & 0.527 & 0.211 & 9.747 & 10.484 \\
+        split  & 0.533 & 0.281 & 1.409 & 2.223 \\
+        pinned & 0.533 & 0.145 & 2.574 & 3.253 \\
+        bucket & 0.528 & 0.079 & 4.271 & 4.878 \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Sobel-Laufzeiten der betrachteten Varianten, TJ-Messung;
+        Mittelwert aus 200 Läufen.}
+    \label{tab:sobel-runtime-selected}
+\end{table}
+
+Wie anhand der Tabelle leicht erkennbar, hat die Reduzierung der Laufzeit des D$\to$H Transfers durch Pinned Meory die größte Auswirkung auf die Laufzeit. Die separate Pinned Memory Funktion ist bei einigen Messungen bereits aktiviert (Split, Pinned, Bucket), was somit deren deutlich kürzere Gesamtlaufzeiten erklärt. Interessanter sind die Kernel-Laufzeiten. Auffällig ist, dass die Kernelzeit zwischen der naiven zur Shared Memory Variant von $0.140\,\mathrm{ms}$ auf
+$0.211\,\mathrm{ms}$ steigt. Das kooperative Laden der Kachel inklusive Halo sowie
+die notwendige Synchronisation erzeugen also bei dem kleinen $3 \times 3$-Stencil
+mehr Overhead als durch die Reduktion redundanter Memory-Zugriffe
+eingespart wird. Shared Memory bringt für diese Sobel-Ausführung daher keinen
+Laufzeitvorteil (verändert aber das Memory-Zugriffsverhalten, wie weiter unten in der NCU Analyse erkennbar wird).
+
+Die \texttt{pinned}-Variante verwendet wie die arithmetisch optimierte
+Konfiguration den einzelnen \texttt{optimized\_sobel\_filter()}-Kernel. Dieser
+Kernel adressiert die drei Bildzeilen über Zeiger, entrollt die
+Sobel-Berechnung und verwendet Bitverschiebungen für die Multiplikation mit
+zwei. Die Kernelzeit von $0.145\,\mathrm{ms}$ liegt deshalb nahe an der
+naiven Variante (und unterschreitet diese auch häufig, durch die minimale Optimierung kann es hier jedoch zu Schwankungen in den Messergebnissen kommen), wird aber nicht durch Pinned Memory selbst verursacht. Außerdem verwendet der Kernel die L1-Norm $|G_x|+|G_y|$ statt der euklidischen Magnitude und ist daher nicht vollständig ergebnisidentisch zur naiven Variante.
+
+Die \texttt{bucket}-Variante baut ebenfalls auf der entrollten Berechnung
+auf, ersetzt aber zusätzlich die teure Berechnung mit \texttt{atan2f()} durch
+eine direkte Einordnung von $G_x$ und $G_y$ in vier Richtungs-Buckets. Die
+Richtung wird dadurch als \texttt{uint8\_t} statt als \texttt{float}
+gespeichert. Mit $0.079\,\mathrm{ms}$ besitzt \texttt{bucket} die kürzeste
+Kernelzeit, was deutlich macht, welchen großen Einfluss die Verwendung der atan2f() Bibliotheksfunktion auf die Laufzeit hat.
+
+Die \texttt{split}-Variante berechnet $G_x$ und $G_y$ in zwei separaten
+Kernels und führt anschließend einen dritten Kombinationskernel aus. Dafür
+werden zwei temporäre \texttt{int16\_t}-Puffer im Gerätespeicher angelegt.
+Die gemessene Kernelzeit umfasst alle drei Kernelstarts und beträgt daher
+$0.281\,\mathrm{ms}$. Sie ist höher als bei allen anderen betrachteten
+Varianten. Trotzdem erreicht \texttt{split} mit $2.223\,\mathrm{ms}$ die
+kürzeste Gesamtlaufzeit. Ausschlaggebend sind der kleine
+Richtungsbuffer mit vier Buckets und der kurze D$\to$H-Transfer von
+$1.409\,\mathrm{ms}$.
+
+Der Vergleich zeigt damit unterschiedliche Optimierungsziele. \texttt{split}
+ist in der vorliegenden Messung für die Gesamtzeit am günstigsten, während
+\texttt{bucket} den schnellsten einzelnen Kernel besitzt. \texttt{pinned}
+kombiniert den optimierten Kernel mit page-locked Host-Speicher und erreicht
+eine deutlich niedrigere Gesamtzeit als die naive und shared Versionen. Im Gegensatz zu
+\texttt{split} und \texttt{bucket} speichert \texttt{sobel\_opt} (und damit \texttt{pinned} die Richtung
+weiterhin als vollständigen Winkelwert aus \texttt{atan2f()}. Für die
+anschließende Non-Maximum Suppression reichen die vier Richtungs-Buckets aus;
+wenn jedoch die vollständige Winkelinformation benötigt wird, ist
+\texttt{pinned} die passendere Variante.
+
+\subsubsection{Kernelprofiling}
+
+Die zusammengefassten NCU Werte aus Anhang B ergänzen die
+Laufzeitmessung um die Auslastungs- und Cache-Metriken. Für \texttt{pinned}
+existiert kein eigener Profiling-Eintrag, da diese Variante denselben
+\texttt{optimized\_sobel\_filter()}-Kernel wie die optimierte Konfiguration
+verwendet. Der Eintrag \texttt{optimized} in der Profiling-Tabelle beschreibt
+daher den Kernel, der im Laufzeitvergleich durch \texttt{pinned} repräsentiert
+wird.
+
+\begin{table}[H]
+    \centering
+    \setlength{\tabcolsep}{3pt}
+    \begin{tabularx}{\textwidth}{l R R R R R}
+        \toprule
+        Metrik & naive & shared & optimized & bucket & split \\
+        \midrule
+        Compute (SM) Throughput [\%] & 61.70 & 62.36 & 62.24 & 57.07 & 45.46 \\
+        Memory Throughput [\%] & 53.36 & 37.52 & 54.02 & 57.13 & 56.23 \\
+        DRAM Throughput [\%] & 53.36 & 34.06 & 54.02 & 28.73 & 44.00 \\
+        Achieved Occupancy [\%] & 81.12 & 90.04 & 81.03 & 78.43 & 76.65 \\
+        Warp Cycles per Issued Instruction & 15.39 & 17.10 & 15.22 & 20.13 & 26.12 \\
+        L1/TEX Hit Rate [\%] & 62.69 & 12.79 & 62.68 & 67.47 & 43.77 \\
+        L2 Hit Rate [\%] & 68.43 & 39.65 & 68.73 & 82.03 & 65.26 \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Zusammengefasstes Sobel-Kernelprofiling aus Anhang B;
+        zehn Runs je Variante, Warm-up ausgeschlossen.}
+    \label{tab:sobel-ncu}
+\end{table}
+
+Die Shared Memory Variante erreicht mit $90.04\,\%$ zwar die höchste
+Occupancy, weist aber gleichzeitig die niedrigste L1/TEX-Hit-Rate von
+$12.79\,\%$ und höhere Warp-Zyklen auf. Die
+höhere theoretische Auslastung führt deshalb nicht zu einer kürzeren
+Laufzeit, vielmehr scheinen die relativ hohen L1-Hitrates den Vorteil von Shared Memory zu nivellieren, weil bei dem kleinen Sobel-Faltungskernel die umliegenden Werte anscheinend meistens im L1-Cache vorliegen. Das Profiling liefert damit eine Erklärung, warum die Laufzeit der Shared Memory Variante die der naiven Variante nicht verbessert.
+
+Insgesamt fällt auf, dass keiner der Kernel in Sachen Memory Throughput und Compute Throughout ausgelastet ist, die RTX 5070 Ti ist also mit dem relativ kleinen Bild unterfordert. Da der Compute Throughput meistens über dem des Memory Throughput liegt, kann davon ausgegangen werden, dass der Canny-Algorithmus hier Compute-Bound ist. 
+
+Der optimierte Kernel, der im Laufzeitvergleich über \texttt{pinned}
+betrachtet wird, zeigt gegenüber der naiven Variante nahezu identische
+Profilwerte. Compute Throughput, Memory Throughput, Occupancy,
+Cache-Hit-Raten und Warp-Zyklen ändern sich nur geringfügig. Die kürzere
+Laufzeit von \texttt{pinned} ist
+daher vor allem durch die Transferbedingungen und nicht durch eine deutlich
+h{"o}here Kernel-Auslastung zu erklären.
+
+Die Bucket-Variante besitzt mit $82.03\,\%$ die höchste L2-Hit-Rate und mit
+$57.13\,\%$ auch den höchsten Memory Throughput. Compute Throughput, DRAM
+Throughput und Occupancy liegen mit $57.07\,\%$, $28.73\,\%$ und $78.43\,\%$
+jedoch unter den Werten der naiven und optimierten Variante; außerdem fallen
+mehr Warp-Zyklen an. Ihre kurze Kernelzeit entsteht somit primär durch weniger
+Rechenarbeit und den kleineren Richtungsbuffer, nicht durch eine allgemein
+höhere GPU-Auslastung. Bei der Split-Variante fallen insbesondere die
+niedrige Occupancy von $76.65\,\%$ und die hohen Warp-Zyklen von $26.12$ auf.
+Diese Werte sind mit dem zusätzlichen Aufwand durch die getrennten
+Gradienten-Kernels erklärbar.

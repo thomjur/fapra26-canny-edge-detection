@@ -1,2 +1,103 @@
 \subsection{Schritt 2: Sobel}
 \label{sec:impl_sobel}
+
+Die Sobel-Stufe erhält das geglättete Graustufenbild aus dem vorhergehenden Gaussian-Schritt und
+berechnet für jeden Pixel den horizontalen und vertikalen Gradienten. Dazu wird
+ein zweidimensionales Grid verwendet, wobei jeder Thread immer für
+einen Bildpixel zuständig ist. Die Ausgaben der Sobel-Stufe sind der
+Gradientenwert sowie die Gradientenrichtung, die anschließend von der
+Non-Maximum Suppression verwendet werden.
+
+\subsubsection{Naive Implementierung}
+
+Die naive Variante \texttt{naive\_sobel\_filter()} lädt für jedes innere Pixel
+seine $3 \times 3$-Nachbarschaft aus dem globalen Speicher. Die beiden
+Sobel-Filtermasken lauten
+\begin{equation}
+    G_x = \begin{pmatrix}
+        -1 & 0 & 1 \\
+        -2 & 0 & 2 \\
+        -1 & 0 & 1
+    \end{pmatrix}, \qquad
+    G_y = \begin{pmatrix}
+        -1 & -2 & -1 \\
+         0 &  0 &  0 \\
+         1 &  2 &  1
+    \end{pmatrix}.
+\end{equation}
+Für jeden Nachbarschaftspixel werden die Berechnungen mit beiden Masken
+aufsummiert. Der Gradientenbetrag wird anschließend als
+\begin{equation}
+    M = \sqrt{G_x^2 + G_y^2}
+\end{equation}
+berechnet, auf den 8-Bit-Bereich $[0,255]$ begrenzt und als \texttt{uint8\_t}
+gespeichert. Die Richtung wird mit \texttt{atan2f($G_y$, $G_x$)} in Radiant
+bestimmt, wobei es sich hierbei um eine importierte Bibliotheksfunktion handelt. Da ein Sobel-Filter für jeden Ausgabepixel dieselben Nachbarpixel wie
+umliegende Threads liest, entstehen bei dieser Variante viele redundante
+Speicherzugriffe.
+
+\begin{lstlisting}[style=cuda, basicstyle=\ttfamily\scriptsize,
+    caption={Kernschritte der naiven Sobel-Implementierung},
+    label={lst:sobel_naive}, numbers=left]
+int gx = 0, gy = 0;
+for (int i = -1; i <= 1; ++i) {
+    for (int j = -1; j <= 1; ++j) {
+        const uint8_t pixel = src_buffer[(y + i) * width + (x + j)];
+        gx += pixel * sobelX[i + 1][j + 1];
+        gy += pixel * sobelY[i + 1][j + 1];
+    }
+}
+
+float gradient = sqrtf(gx * gx + gy * gy);
+gradient = fminf(255.0f, fmaxf(0.0f, gradient));
+out_grad_buffer[y * width + x] = static_cast<uint8_t>(gradient);
+out_dir_buffer[y * width + x] = atan2f(float(gy), float(gx));
+\end{lstlisting}
+
+\subsubsection{Shared-Memory-Variante}
+\label{sec:shared_memory_sobel}
+
+Die Variante \texttt{sharedm\_sobel\_filter()} reduziert die redundanten
+Speicherzugriffe durch Tiling. Die Threads eines Blocks laden gemeinsam
+eine Bildkachel in den Shared Memory. Da der Sobel-Operator einen Radius von
+eins besitzt, wird die Kachel an jeder Seite um einen Pixel als Halo erweitert.
+Threads an den Blockgrenzen laden dabei die zusätzlichen Randpixel. Für
+Koordinaten außerhalb des Bildes wird Zero-Padding verwendet Die mathematische Berechnung von Betrag und
+Richtung entspricht der naiven Variante.
+
+Für diese Variante wird testweise ein anderes Blocklayout verwendet: Die Kacheln werden
+mit einem Block von \texttt{BLOCK\_SIZE\_X} $\times$ \texttt{BLOCK\_SIZE\_Y}
+Threads verarbeitet, während die übrigen Varianten quadratische Blöcke
+verwenden. Dadurch lässt sich das Ladeverhalten der Kachel unabhängig von der
+Berechnung untersuchen. Die Idee war hier, dass durch eine andere Block-Size wie 32 x 8 versucht werden kann, beim Laden aus dem globalen Speicher eine besseres Coalescing zu erreichen. Da dies allerdings zu keinen Unterschieden in der Laufzeit geführt hat, wurde dieser Ansatz wieder verworfen und letztlich fast immer auf die 16x16 Blockgröße zurückgegriffen.
+
+\subsubsection{Arithmetische Optimierung}
+
+Da die Shared-Memory-Variante in den Messungen leider nie schneller war,
+verwendet \texttt{optimized\_sobel\_filter()} einen anderen Ansatz, indem hier vor allem die vorherigen Loop-Zugriffe inklusive der Zugriffe auf Arrays mit den entsprechenden Werten für die Faltungen vollständig entrollt wurden. Multiplikationen wurden zudem als
+Bitverschiebungen formuliert. Zusätzlich wird der Betrag durch die L1-Norm
+\begin{equation}
+    M_{\mathrm{L1}} = |G_x| + |G_y|
+\end{equation}
+angenähert, was ebenfalls als Optimierung in \cite{gonzalez_digital_2018} vorgeschlagen wurde. Diese Berechnung vermeidet die teure Quadratwurzel, ist aber nicht
+identisch zur naiven Variante. Die Richtung
+wird in dieser Variante weiterhin mit der teuren \texttt{atan2f()} Bibliotheksfunktion bestimmt.
+
+\subsubsection{Richtungs-Buckets}
+
+Die Variante \texttt{bucket\_sobel\_filter()} baut auf der optimierten Variante (Arithmetische Optimierung) auf, vermeidet aber zusätzlich \texttt{atan2f()}, was möglich ist, weil für die
+Non-Maximum Suppression nur vier ungerichtete Richtungen anstelle der genauen Radianten-Werte benötigt werden:
+$0^\circ$, $45^\circ$, $90^\circ$ und $135^\circ$. Anhand des Verhältnisses
+$|G_y|/|G_x|$ und des Vorzeichens der beiden Komponenten wird die Richtung
+direkt in einen Bucket mit dem Wert $0$ bis $3$ eingeordnet. Dadurch
+wird die Richtung statt als \texttt{float} als \texttt{uint8\_t} gespeichert,
+und die nachfolgende NMS muss die Quantisierung nicht erneut berechnen.
+
+\subsubsection{Split-Variante}
+Als letzte Sobel-Konfiguration wurden die beiden Filterkomponenten für die Gradientenberechnung separat
+berechnet. \texttt{split\_sobel\_x\_filter()} und
+\texttt{split\_sobel\_y\_filter()} schreiben $G_x$ und $G_y$ in temporäre
+\texttt{int16\_t}-Puffer. Ein dritter Kernel,
+\texttt{split\_sobel\_combine\_filter()}, berechnet daraus die L1-Magnitude
+und den Richtungs-Bucket. Diese Variante benötigt somit drei Kernelstarts und
+zusätzlichen Gerätespeicher.

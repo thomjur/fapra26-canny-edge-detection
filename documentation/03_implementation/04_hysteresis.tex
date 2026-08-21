@@ -1,2 +1,63 @@
 \subsection{Schritt 4: Hysteresis}
 \label{sec:impl_hysteresis}
+
+Die Hysteresis-Stufe erhält das von der Non-Maximum Suppression ausgedünnte
+Bild. In der Implementierung werden die beiden
+Schwellwerte \texttt{low\_t} und \texttt{high\_t} mit $\texttt{low\_t}=50$ und $\texttt{high\_t}=150$ initialisiert (was dem empfohlenen 3:1 Verhältnis entspricht).
+
+Wie bereits in der Sektion zur Erklärung des Sobel-Schritts ausgeführt, wird in dieser Implementierung kein iteratives Vorgehen, sondern nur eine einfache Einzeldurchlaufsvariante implementiert mit nur einem Kernel-Start. Eine iterative Variante würde zusätzliche Abhängigkeiten zwischen den Durchläufen und globale Synchronisationen benötigen.
+
+\begin{lstlisting}[style=cuda, basicstyle=\ttfamily\scriptsize,
+    caption={Ein-Schritt-Klassifikation im Hysteresis-Kernel},
+    label={lst:hysteresis_classification}, numbers=left]
+const uint8_t p = src_buffer[index];
+uint8_t out = 0;
+
+if (p >= high_threshold) {
+    out = 255;                         // starke Kante
+} else if (p >= low_threshold) {
+    uint8_t max_n = 0;
+    // Maximum der gueltigen 8 Nachbarn bestimmen
+    for (int dy = -1; dy <= 1; ++dy)
+        for (int dx = -1; dx <= 1; ++dx)
+            if ((dx != 0 || dy != 0) && valid(x + dx, y + dy))
+                max_n = max(max_n, src_buffer[(y + dy) * width + x + dx]);
+    out = (max_n >= high_threshold) ? 255 : 0;
+}
+
+out_buffer[index] = out;
+\end{lstlisting}
+
+\subsubsection{Naive Implementierung}
+
+Im Kernel \texttt{naive\_hysteresis\_linker()} berechnet jeder Thread die
+globale Position eines Pixels. Starke Pixel werden ohne Nachbarschaftszugriff direkt
+akzeptiert. Für schwache Pixel werden bis zu acht Nachbarn aus dem globalen
+Speicher gelesen und auf den oberen Schwellwert geprüft. Sobald ein starker
+Nachbar gefunden wurde, kann die Suche beendet werden. Das Ergebnis wird in
+einen separaten 8-Bit-Ausgabepuffer geschrieben.
+
+\subsubsection{Shared-Memory-Optimierung}
+\label{sec:shared_memory_hysteresis}
+
+\texttt{hysteresis\_sharedm()} lädt zunächst gemeinsam mit allen Threads eines
+Blocks eine Kachel in den Shared Memory. Weil jeder Pixel seine unmittelbare
+Nachbarschaft benötigt, wird die Kachel an jeder Seite um einen Pixel als Halo
+erweitert. Randthreads laden die Seiten und Ecken des Halos; außerhalb des
+Bildes liegende Positionen werden mit 0 gefüllt. Die acht Nachbarn eines
+schwachen Pixels werden dann aus dem Shared Memory gelesen, wodurch dieselben
+Global-Memory-Werte nicht für jeden Nachbarschaftszugriff erneut geladen werden
+müssen.
+
+\subsubsection{Optimierte Variante und Randbehandlung}
+
+Die Variante \texttt{hysteresis\_opt()} verzichtet auf Shared-Memory-Tiling (weil dieses auch hier wie im Sobel-Schritt keine Laufzeitverbesserung gebracht hat).
+Für innere Pixel werden die acht Nachbarzugriffe stattdessen vollständig
+entrollt. Das reduziert Schleifen- und Indexierungs-Overhead.
+
+Bei Randpixeln sind nicht alle acht Nachbarschaftspositionen gültig. Deshalb
+verwendet der optimierte Kernel für innere Pixel den schnellen unrolled Pfad
+und für Randpixel eine separate, bounds-geprüfte Nachbarschaftsschleife. So
+werden weder negative Indizes noch Zugriffe hinter dem Bildende erzeugt,
+während schwache Randpixel weiterhin von tatsächlich vorhandenen starken
+Nachbarn übernommen werden können.

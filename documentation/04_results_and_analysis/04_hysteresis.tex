@@ -1,2 +1,91 @@
 \subsection{Schritt 4: Hysteresis}
 \label{sec:results_hysteresis}
+
+\subsubsection{Performance}
+
+Die folgenden Laufzeitwerte entsprechen der TJ-Spalte
+aus Anhang~\ref{app:hysteresis-results} und sind Mittelwerte aus 200 Läufen.
+Der Warmup-Lauf wird nicht in den Vergleich einbezogen.
+
+\begin{table}[H]
+    \centering
+    \setlength{\tabcolsep}{6pt}
+    \begin{tabularx}{0.9\textwidth}{l R R R R}
+        \toprule
+        Variante & H$\to$D [ms] & Kernel [ms] & D$\to$H [ms] & Gesamt [ms] \\
+        \midrule
+        naive     & 0.593 & 0.097 & 0.657 & 1.347 \\
+        shared    & 0.587 & 0.157 & 0.646 & 1.390 \\
+        optimiert & 0.587 & 0.081 & 0.663 & 1.330 \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Hysteresis-Laufzeiten der drei Varianten, TJ-Messung;
+        Mittelwert aus 200 Läufen.}
+    \label{tab:hysteresis-runtime}
+\end{table}
+
+Die optimierte Variante erzielt mit $0.081\,\mathrm{ms}$ die kürzeste
+Kernelzeit. Gegenüber der naiven Variante entspricht dies einer Reduktion um
+rund $16.5\,\%$. Im Kernel werden für innere Pixel die acht
+Nachbarschaftszugriffe vollständig entrollt. Für Randpixel bleibt ein
+separater, bounds-geprüfter Pfad erhalten. Dadurch werden Schleifen- und
+Indexierungsaufwand im häufigeren inneren Pfad reduziert, ohne ungültige
+Speicherzugriffe an den Bildrändern zu erzeugen.
+
+Die Shared-Memory-Variante ist mit $0.157\,\mathrm{ms}$ dagegen rund
+$61.9\,\%$ langsamer als die naive Kernelvariante. Zwar lädt jeder Block die
+Bildkachel einschließlich eines ein Pixel breiten Halos nur einmal aus dem
+globalen Speicher. Vor der Klassifikation ist jedoch eine
+\texttt{\_\_syncthreads()}-Barriere erforderlich, und die Kachel muss zunächst
+durch zusätzliche Rand- und Eckzugriffe aufgebaut werden. Für die hier
+verwendete lokale 8-Nachbarschaft reicht der daraus entstehende Vorteil nicht
+aus, um diesen Overhead auszugleichen.
+
+Bei der Gesamtzeit fällt der Unterschied zwischen den Varianten deutlich
+kleiner aus, weil die Transfers den größten Anteil einnehmen. Bei der naiven
+Variante entfallen $1.250\,\mathrm{ms}$ der insgesamt $1.347\,\mathrm{ms}$ auf
+H$\to$D und D$\to$H.
+
+\subsubsection{Kernelprofiling}
+
+Die Profiling-Tabelle in Anhang~\ref{app:hysteresis-results} zeigt für die
+Shared Memory Variante eine deutlich höhere Occupancy, aber niedrigere
+Cache-Hitrates und eine höhere Kernelzeit. Konkret senkt die Shared Memory Variante den Memory Throughput von $42.91\,\%$ auf $36.04\,\%$ sowie den DRAM
+Throughput auf $9.51\,\%$ und erhöht die L2-Hit-Rate auf
+$79.50\,\%$. Diese Werte zeigen, dass die Kachel tatsächlich einen Teil der
+globalen Speicherzugriffe ersetzt. Gleichzeitig fällt die L1/TEX-Hit-Rate
+auf $26.46\,\%$, und die Laufzeit steigt. Die Speicherentlastung allein
+reicht somit nicht aus, um den Synchronisations- und Ladeaufwand zu
+kompensieren.
+
+Die Einordnung bestätigt die Vermutung, dass das Tiling und die Synchronisation bei dieser kleinen Nachbarschaft mehr Aufwand erzeugen als Nutzen bringen (ähnlich wie im Fall des Sobel-Kernels).
+
+\begin{table}[H]
+    \centering
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabularx}{\textwidth}{l R R R}
+        \toprule
+        Metrik & naive & shared & optimiert \\
+        \midrule
+        Compute (SM) Throughput [\%] & 33.57 & 41.65 & 33.60 \\
+        Memory Throughput [\%] & 42.91 & 36.04 & 33.96 \\
+        DRAM Throughput [\%] & 16.50 & 9.51 & 19.44 \\
+        Achieved Occupancy [\%] & 70.67 & 90.22 & 70.28 \\
+        Warp Cycles per Issued Instruction & 25.52 & 25.77 & 27.73 \\
+        L1/TEX Hit Rate [\%] & 55.28 & 26.46 & 51.74 \\
+        L2 Hit Rate [\%] & 75.27 & 79.50 & 70.54 \\
+        \bottomrule
+    \end{tabularx}
+    \caption{Zusammengefasstes Hysteresis-Kernelprofiling aus Anhang D;
+        zehn Runs je Variante, Warm-up ausgeschlossen.}
+    \label{tab:hysteresis-ncu}
+\end{table}
+
+Die optimierte Variante besitzt nahezu dieselbe Occupancy wie die naive
+Variante, erreicht aber den niedrigsten Memory Throughput von $33.96\,\%$ und
+den höchsten DRAM Throughput von $19.44\,\%$. Ihre Warp-Zyklen liegen mit
+$27.73$ über den beiden anderen Varianten. Die Profiling-Werte zeigen damit
+kein einheitliches Bild einer höheren Speicherauslastung. Zusammen mit der
+niedrigsten gemessenen Kernelzeit zeigt die Laufzeitmessung jedoch, dass die
+unrolled Global-Memory-Zugriffe auf der verwendeten GPU günstiger sind als das
+Shared-Memory-Tiling. Insgesamt ist der deutlich niedrigere Memory Throughput interessant und scheint darauf hinzuweisen, dass die unrolled Variante auch einen Einfluss darauf hat, wie aus den verschiedenen Speichern geladen wird (allerdings nicht bei der Sobel-Variante).

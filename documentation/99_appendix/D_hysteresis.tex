@@ -1,0 +1,45 @@
+\section{Hysteresis Messungen}
+\label{app:hysteresis-results}
+
+\begin{table}[H]
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabularx}{\textwidth}{l RR RR RR}
+\toprule
+& \multicolumn{2}{c}{naive} & \multicolumn{2}{c}{shared} & \multicolumn{2}{c}{optimized} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+Metrik & MS & TJ & MS & TJ & MS & TJ \\
+\midrule
+\multicolumn{7}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  0.000 & 0.926 &  0.000 & 0.860 &  0.000 & 0.922 \\
+Kernel [ms]   &  0.000 & 0.090 &  0.000 & 0.152 &  0.000 & 0.071 \\
+D$\to$H [ms]  &  0.000 & 3.408 &  0.000 & 3.439 &  0.000 & 3.517 \\
+Total [ms]    & 0.000 & 4.425 & 0.000 & 4.451 &  0.000 & 4.511 \\
+\midrule
+\multicolumn{7}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  0.000 & 0.593 &  0.000 & 0.587 &  0.000 & 0.587 \\
+Kernel [ms]   &  0.000 & 0.097 &  0.000 & 0.157 &  0.000 & 0.081 \\
+D$\to$H [ms]  &  0.000 & 0.657 &  0.000 & 0.646 &  0.000 & 0.663 \\
+Total [ms]    &  0.000 & 1.347 & 0.000 & 1.390 &  0.000 & 1.330 \\
+\bottomrule
+    \end{tabularx}
+    \caption{Hysteresis Kernel. cudaEvent-Messungen. \\
+        MS: Matthias Stefan, TJ: Thomas Jurczyk.}
+    \label{tab:nms-bucket}
+\end{table}
+
+\begin{table}[H]
+    \begin{tabularx}{\textwidth}{lRRR}
+\toprule
+Metrik (NCU, 10 Runs Avg) & naive & shared & opt \\
+\midrule
+Compute (SM) Throughput [\%]       & 33.57 & 41.65 & 33.60 \\
+Memory Throughput [\%]             & 42.91 & 36.04 & 33.96 \\
+DRAM Throughput [\%]               & 16.50 & 9.51 & 19.44 \\
+Achieved Occupancy [\%]            & 70.67 & 90.22 & 70.28 \\
+Warp Cycles Per Issued Instruction & 25.52 & 25.77 & 27.73 \\
+L1/TEX Hit Rate [\%]               & 55.28 & 26.46 & 51.74 \\
+L2 Hit Rate [\%]                   & 75.27 & 79.50 & 70.54 \\
+\bottomrule
+    \end{tabularx}
+    \caption{NCU-Profiling der Hysteresis-Implementierungen}
+\end{table}

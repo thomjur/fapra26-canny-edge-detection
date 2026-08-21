@@ -1,0 +1,54 @@
+NCU Report: sobel_naive.csv
+Metric                                   | Runs |      Min |      Max |      Avg |   StdDev
+------------------------------------------------------------------------------------------
+Compute (SM) Throughput                  |   10 |    61.38 |    61.94 |    61.70 |    0.176
+Memory Throughput                        |   10 |    52.57 |    54.45 |    53.36 |    0.485
+DRAM Throughput                          |   10 |    52.57 |    54.45 |    53.36 |    0.485
+Achieved Occupancy                       |   10 |    80.08 |    81.83 |    81.12 |    0.668
+Warp Cycles Per Issued Instruction       |   10 |    15.24 |    15.51 |    15.39 |    0.078
+L1/TEX Hit Rate                          |   10 |    62.68 |    62.70 |    62.69 |    0.007
+L2 Hit Rate                              |   10 |    66.56 |    68.81 |    68.43 |    0.711
+
+NCU Report: sobel_shared.csv
+Metric                                   | Runs |      Min |      Max |      Avg |   StdDev
+------------------------------------------------------------------------------------------
+Compute (SM) Throughput                  |   10 |    62.26 |    62.47 |    62.36 |    0.075
+Memory Throughput                        |   10 |    37.51 |    37.64 |    37.57 |    0.045
+DRAM Throughput                          |   10 |    33.80 |    35.00 |    34.06 |    0.340
+Achieved Occupancy                       |   10 |    89.57 |    90.37 |    90.04 |    0.246
+Warp Cycles Per Issued Instruction       |   10 |    17.04 |    17.15 |    17.10 |    0.031
+L1/TEX Hit Rate                          |   10 |    12.77 |    12.80 |    12.79 |    0.010
+L2 Hit Rate                              |   10 |    38.88 |    39.83 |    39.65 |    0.275
+
+NCU Report: sobel_optimized.csv
+Metric                                   | Runs |      Min |      Max |      Avg |   StdDev
+------------------------------------------------------------------------------------------
+Compute (SM) Throughput                  |   10 |    61.80 |    62.58 |    62.24 |    0.206
+Memory Throughput                        |   10 |    53.47 |    55.28 |    54.02 |    0.612
+DRAM Throughput                          |   10 |    53.47 |    55.28 |    54.02 |    0.612
+Achieved Occupancy                       |   10 |    80.12 |    81.94 |    81.03 |    0.561
+Warp Cycles Per Issued Instruction       |   10 |    15.11 |    15.39 |    15.22 |    0.079
+L1/TEX Hit Rate                          |   10 |    62.67 |    62.69 |    62.68 |    0.006
+L2 Hit Rate                              |   10 |    68.12 |    68.82 |    68.73 |    0.215
+
+NCU Report: sobel_bucket.csv
+Metric                                   | Runs |      Min |      Max |      Avg |   StdDev
+------------------------------------------------------------------------------------------
+Compute (SM) Throughput                  |   10 |    56.77 |    57.40 |    57.07 |    0.220
+Memory Throughput                        |   10 |    56.81 |    57.40 |    57.13 |    0.172
+DRAM Throughput                          |   10 |    27.54 |    29.59 |    28.73 |    0.688
+Achieved Occupancy                       |   10 |    77.53 |    79.45 |    78.43 |    0.708
+Warp Cycles Per Issued Instruction       |   10 |    19.92 |    20.35 |    20.13 |    0.128
+L1/TEX Hit Rate                          |   10 |    67.46 |    67.50 |    67.47 |    0.011
+L2 Hit Rate                              |   10 |    81.51 |    82.21 |    82.03 |    0.278
+
+NCU Report: sobel_split.csv
+Metric                                   | Runs |      Min |      Max |      Avg |   StdDev
+------------------------------------------------------------------------------------------
+Compute (SM) Throughput                  |   32 |    36.10 |    50.52 |    45.46 |    6.670
+Memory Throughput                        |   32 |    49.44 |    68.40 |    56.23 |    8.460
+DRAM Throughput                          |   32 |    30.63 |    68.40 |    44.00 |   17.459
+Achieved Occupancy                       |   32 |    74.70 |    78.24 |    76.65 |    1.087
+Warp Cycles Per Issued Instruction       |   32 |    23.77 |    27.81 |    26.12 |    1.604
+L1/TEX Hit Rate                          |   32 |     1.57 |    67.70 |    43.77 |   30.983
+L2 Hit Rate                              |   32 |    43.47 |    76.88 |    65.26 |   15.881

@@ -8,26 +8,27 @@ bauen dabei aufeinander auf, statt unabhängige Alternativen
 darzustellen: Bei Gaussian ersetzt Shared Memory zunächst die naive
 Faltung durch Tiling, während Pinned Memory zusätzlich den
 D→H-Transfer beschleunigt, sodass die höchste Stufe stets beides
-kombiniert.
+kombiniert. Selbiges gilt für den Sobel Filter, bei dem die Pinned Memory Variante den optimierten Kernel enthält.
 
 \texttt{build\_release.sh} übersetzt jede Übersetzungseinheit einzeln
 mit \texttt{nvcc} und reicht die Stufe über die Umgebungsvariablen
-\texttt{GAUSSIAN\_OPT}, \texttt{SOBEL\_OPT} und \texttt{NMS\_OPT} als
+\texttt{GAUSSIAN\_OPT}, \texttt{SOBEL\_OPT}, \texttt{NMS\_OPT} und \texttt{HYSTERESIS\_OPT} als
 \texttt{-D}-Flags weiter, zum Beispiel:
 
 \begin{verbatim}
-GAUSSIAN_OPT=1 SOBEL_OPT=0 NMS_OPT=1 ./build_release.sh
+GAUSSIAN_OPT=1 SOBEL_OPT=0 NMS_OPT=1 HYSTERESIS_OP=3 ./build_release.sh
 \end{verbatim}
 
-Ohne Angabe greifen die Standardwerte (\texttt{GAUSSIAN\_OPT=2},
-\texttt{SOBEL\_OPT=1}, \texttt{NMS\_OPT=1}), jeweils die am weitesten
-optimierte Variante, während \texttt{WARMUP} (Standard: aktiviert)
+Ohne Angabe greifen die Standardwerte, die im Script angegeben werden, wobei meist die am weitesten
+optimierte Variante (inkl. Pinned Memory) gewählt wurde, während \texttt{WARMUP} (Standard: aktiviert)
 einen Aufwärm-Kerneldurchlauf vor der Zeitmessung steuert. Da separable
 Device-Compilation (\texttt{-rdc=true}) verwendet wird, ist zudem ein
 Device-Link-Schritt (\texttt{nvcc~-dlink}) vor dem finalen Host-Link
-nötig, bei dem die Ziel-Architektur (\texttt{-arch=sm\_75}) erneut
+nötig, bei dem die Ziel-Architektur (\texttt{-arch=sm\_75} für RTX 2060, \texttt{-arch=sm\_120} für die RTX 5070 Ti) erneut
 angegeben werden muss, da \texttt{nvcc} sonst implizit auf eine ältere
 Architektur zurückfällt.
+
+Neben den genannten Parametern kann für die Kompilierung via \texttt{FUSED\_PIPELINE=1} auch die Variante mit reduzierten D→H/H→D Transfers zwischen den einzelnen Schritten aktiviert werden sowie via \texttt{BENCHMARK\_RUNS} die Anzahl der Kernel-Runs übergeben werden.
 
 \begin{sloppypar}
     Analog erzeugt \texttt{build\_debug.sh} eine Debug-Variante mit den
