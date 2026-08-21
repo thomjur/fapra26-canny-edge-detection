@@ -1,29 +1,11 @@
 \subsection{Schritt 4: Hysteresis}
 \label{sec:results_hysteresis}
 
-\subsubsection{Funktionsweise und Implementierungsgrenze}
-
-Die Hysteresis-Stufe erhält das von der Non-Maximum Suppression erzeugte
-Gradientenbild und klassifiziert die Pixel mit den Schwellwerten
-$\texttt{low\_threshold}=50$ und $\texttt{high\_threshold}=150$. Starke
-Pixel ab dem oberen Schwellwert werden direkt als Kante mit dem Wert 255
-ausgegeben. Schwache Pixel zwischen den beiden Schwellwerten werden nur dann
-übernommen, wenn mindestens eines ihrer acht Nachbarpixel im Eingabebild den
-oberen Schwellwert erreicht. Alle übrigen Pixel werden auf 0 gesetzt.
-
-Die Implementierung in \texttt{hysteresis.cu} führt dabei bewusst nur einen
-solchen lokalen Durchlauf aus. Ein schwaches Pixel, das in diesem Durchlauf
-übernommen wird, dient nicht anschließend selbst als neue starke Quelle. Eine
-Kette mehrerer schwacher Pixel wird daher nicht iterativ bis zu einer starken
-Kante verfolgt. Die Messergebnisse bewerten somit diese Ein-Schritt-Variante
-und nicht eine vollständig iterative Hysterese mit globaler Kantenpropagation.
-
 \subsubsection{Performance}
 
-Die Laufzeiten wurden mit CUDA-Events getrennt für H$\to$D-Transfer, Kernel
-und D$\to$H-Transfer bestimmt. Die folgenden Werte entsprechen der TJ-Spalte
+Die folgenden Laufzeitwerte entsprechen der TJ-Spalte
 aus Anhang~\ref{app:hysteresis-results} und sind Mittelwerte aus 200 Läufen.
-Der Warm-up-Lauf wird nicht in den Vergleich einbezogen.
+Der Warmup-Lauf wird nicht in den Vergleich einbezogen.
 
 \begin{table}[H]
     \centering
@@ -62,21 +44,21 @@ aus, um diesen Overhead auszugleichen.
 Bei der Gesamtzeit fällt der Unterschied zwischen den Varianten deutlich
 kleiner aus, weil die Transfers den größten Anteil einnehmen. Bei der naiven
 Variante entfallen $1.250\,\mathrm{ms}$ der insgesamt $1.347\,\mathrm{ms}$ auf
-H$\to$D und D$\to$H. Die optimierte Variante reduziert die Gesamtzeit deshalb
-nur um rund $1.3\,\%$ auf $1.330\,\mathrm{ms}$, obwohl ihre Kernelzeit deutlich
-kürzer ist. Die Shared-Memory-Variante besitzt sogar die niedrigste Summe der
-beiden Transferzeiten, bleibt mit $1.390\,\mathrm{ms}$ insgesamt aber rund
-$3.2\,\%$ hinter der naiven Variante zurück, weil ihre Kernelzeit den
-Transfervorteil übersteigt.
+H$\to$D und D$\to$H.
 
 \subsubsection{Kernelprofiling}
 
 Die Profiling-Tabelle in Anhang~\ref{app:hysteresis-results} zeigt für die
-Shared-Memory-Variante eine deutlich höhere Occupancy, aber niedrigere
-Cache-Hit-Raten und eine höhere Kernelzeit. Die Einordnung bestätigt damit
-die aus \texttt{hysteresis.cu} abgeleitete Vermutung, dass das Tiling und die
-Synchronisation bei dieser kleinen Nachbarschaft mehr Aufwand erzeugen als
-Nutzen bringen.
+Shared Memory Variante eine deutlich höhere Occupancy, aber niedrigere
+Cache-Hitrates und eine höhere Kernelzeit. Konkret senkt die Shared Memory Variante den Memory Throughput von $42.91\,\%$ auf $36.04\,\%$ sowie den DRAM
+Throughput auf $9.51\,\%$ und erhöht die L2-Hit-Rate auf
+$79.50\,\%$. Diese Werte zeigen, dass die Kachel tatsächlich einen Teil der
+globalen Speicherzugriffe ersetzt. Gleichzeitig fällt die L1/TEX-Hit-Rate
+auf $26.46\,\%$, und die Laufzeit steigt. Die Speicherentlastung allein
+reicht somit nicht aus, um den Synchronisations- und Ladeaufwand zu
+kompensieren.
+
+Die Einordnung bestätigt die Vermutung, dass das Tiling und die Synchronisation bei dieser kleinen Nachbarschaft mehr Aufwand erzeugen als Nutzen bringen (ähnlich wie im Fall des Sobel-Kernels).
 
 \begin{table}[H]
     \centering
@@ -86,7 +68,7 @@ Nutzen bringen.
         Metrik & naive & shared & optimiert \\
         \midrule
         Compute (SM) Throughput [\%] & 33.57 & 41.65 & 33.60 \\
-        Memory Throughput [\%] & 94.22 & 59.97 & 102.73 \\
+        Memory Throughput [\%] & 42.91 & 36.04 & 33.96 \\
         DRAM Throughput [\%] & 16.50 & 9.51 & 19.44 \\
         Achieved Occupancy [\%] & 70.67 & 90.22 & 70.28 \\
         Warp Cycles per Issued Instruction & 25.52 & 25.77 & 27.73 \\
@@ -99,31 +81,11 @@ Nutzen bringen.
     \label{tab:hysteresis-ncu}
 \end{table}
 
-Die Shared-Memory-Variante erreicht mit $90.22\,\%$ die höchste Occupancy,
-senkt den DRAM Throughput auf $9.51\,\%$ und erhöht die L2-Hit-Rate auf
-$79.50\,\%$. Diese Werte zeigen, dass die Kachel tatsächlich einen Teil der
-globalen Speicherzugriffe ersetzt. Gleichzeitig fällt die L1/TEX-Hit-Rate
-auf $26.46\,\%$, und die Laufzeit steigt. Die Speicherentlastung allein
-reicht somit nicht aus, um den Synchronisations- und Ladeaufwand zu
-kompensieren.
-
 Die optimierte Variante besitzt nahezu dieselbe Occupancy wie die naive
-Variante, erreicht aber den höchsten Memory Throughput von $102.73\,\%$ und
+Variante, erreicht aber den niedrigsten Memory Throughput von $33.96\,\%$ und
 den höchsten DRAM Throughput von $19.44\,\%$. Ihre Warp-Zyklen liegen mit
-$27.73$ über den beiden anderen Varianten. Zusammen mit der niedrigsten
-gemessenen Kernelzeit zeigt dies, dass die unrolled Global-Memory-Zugriffe
-auf der verwendeten GPU günstiger sind als das Shared-Memory-Tiling. Die
-Profiling-Werte werden dabei als ergänzende Indikatoren interpretiert; die
-entscheidende Bewertung erfolgt über die CUDA-Event-Laufzeiten.
-
-\subsubsection{Bewertung}
-
-Für die isoliert gemessene Hysteresis-Stufe ist die optimierte Variante die
-schnellste der drei Implementierungen. Ihr Vorteil zeigt sich vor allem in
-der Kernelzeit und nur abgeschwächt in der Gesamtzeit, da die getrennten
-Host-Device-Transfers die Messung dominieren. Das Shared-Memory-Tiling ist
-für diesen kleinen lokalen Nachbarschaftsoperator auf der verwendeten GPU
-nicht vorteilhaft. In einer gefalteten Pipeline ohne Zwischenkopien wäre der
-relative Einfluss der Kernelzeit größer; die hier gemessene Rangfolge belegt
-jedoch zunächst die optimierte Variante als geeignete Implementierung für die
-vorliegende Ein-Schritt-Hysterese.
+$27.73$ über den beiden anderen Varianten. Die Profiling-Werte zeigen damit
+kein einheitliches Bild einer höheren Speicherauslastung. Zusammen mit der
+niedrigsten gemessenen Kernelzeit zeigt die Laufzeitmessung jedoch, dass die
+unrolled Global-Memory-Zugriffe auf der verwendeten GPU günstiger sind als das
+Shared-Memory-Tiling. Insgesamt ist der deutlich niedrigere Memory Throughput interessant und scheint darauf hinzuweisen, dass die unrolled Variante auch einen Einfluss darauf hat, wie aus den verschiedenen Speichern geladen wird (allerdings nicht bei der Sobel-Variante).

@@ -2,47 +2,10 @@
 \label{sec:impl_hysteresis}
 
 Die Hysteresis-Stufe erhält das von der Non-Maximum Suppression ausgedünnte
-Gradientenbild. Ziel ist ein binäres Kantenbild, in dem starke Kanten sicher
-übernommen und schwache Kanten nur dann behalten werden, wenn sie mit einer
-starken Kante verbunden sind. In der Implementierung werden dafür die beiden
-Schwellwerte \texttt{low\_t} und \texttt{high\_t} verwendet. Standardmäßig
-gelten $\texttt{low\_t}=50$ und $\texttt{high\_t}=150$.
+Bild. In der Implementierung werden die beiden
+Schwellwerte \texttt{low\_t} und \texttt{high\_t} mit $\texttt{low\_t}=50$ und $\texttt{high\_t}=150$ initialisiert (was dem empfohlenen 3:1 Verhältnis entspricht).
 
-Für jedes Pixel gelten dabei die folgenden Regeln:
-\begin{itemize}
-    \item Ein Pixel mit $p \geq \texttt{high\_t}$ ist eine starke Kante und
-          wird als 255 ausgegeben.
-    \item Ein Pixel mit $\texttt{low\_t} \leq p < \texttt{high\_t}$ ist eine
-          schwache Kante. Es wird nur als 255 ausgegeben, wenn mindestens ein
-          Pixel seiner 8er-Nachbarschaft den oberen Schwellwert erreicht.
-    \item Alle übrigen Pixel werden als 0 ausgegeben.
-\end{itemize}
-
-\subsubsection{Bewusste Ein-Schritt-Implementierung}
-
-Der klassische Hysteresis-Algorithmus kann eine Kette schwacher Kantenpixel
-verfolgen. Ausgehend von einer starken Kante werden dabei schwache Pixel
-übernommen, und jedes neu übernommene Pixel kann anschließend selbst als
-Ausgangspunkt für die Suche nach weiteren schwachen Pixeln dienen. Eine solche
-Verfolgung kann iterativ bis zu einem stabilen Ergebnis wiederholt werden.
-
-Die vorliegende Implementierung führt dagegen bewusst nur einen Durchlauf aus.
-Ein schwaches Pixel wird ausschließlich dann übernommen, wenn bereits im
-Eingabebild ein starkes Pixel direkt in seiner 8er-Nachbarschaft liegt. Ein
-Pixel, das in diesem Durchlauf als Kante markiert wurde, wird nicht erneut als
-starke Quelle verwendet. Dadurch werden Ketten, die mehrere schwache Pixel
-zwischen sich und der nächsten starken Kante enthalten, nicht weiter
-propagiert.
-
-Diese Einschränkung folgt der zugrunde gelegten Beschreibung des Algorithmus,
-in der nur ein Durchlauf betrachtet wird. Eine iterative Variante würde
-zusätzliche Abhängigkeiten zwischen den Durchläufen und globale
-Synchronisationen benötigen. Alternativ müsste eine Suche mit einer dynamischen
-Frontier implementiert werden, bei der neu gefundene Kanten weitere
-Nachbarschaftssuchen auslösen. Beide Ansätze sind auf der GPU deutlich schwerer
-parallelisierbar als die lokale, für jedes Pixel unabhängige Entscheidung.
-Für diese Arbeit wurde daher die Ein-Schritt-Variante gewählt, um eine
-regelmäßige CUDA-Ausführung mit einem Kernelstart zu erhalten.
+Wie bereits in der Sektion zur Erklärung des Sobel-Schritts ausgeführt, wird in dieser Implementierung kein iteratives Vorgehen, sondern nur eine einfache Einzeldurchlaufsvariante implementiert mit nur einem Kernel-Start. Eine iterative Variante würde zusätzliche Abhängigkeiten zwischen den Durchläufen und globale Synchronisationen benötigen.
 
 \begin{lstlisting}[style=cuda, basicstyle=\ttfamily\scriptsize,
     caption={Ein-Schritt-Klassifikation im Hysteresis-Kernel},
@@ -68,7 +31,7 @@ out_buffer[index] = out;
 \subsubsection{Naive Implementierung}
 
 Im Kernel \texttt{naive\_hysteresis\_linker()} berechnet jeder Thread die
-globale Position eines Pixels. Starke Pixel werden ohne Nachbarschaftszugriff
+globale Position eines Pixels. Starke Pixel werden ohne Nachbarschaftszugriff direkt
 akzeptiert. Für schwache Pixel werden bis zu acht Nachbarn aus dem globalen
 Speicher gelesen und auf den oberen Schwellwert geprüft. Sobald ein starker
 Nachbar gefunden wurde, kann die Suche beendet werden. Das Ergebnis wird in
@@ -78,21 +41,19 @@ einen separaten 8-Bit-Ausgabepuffer geschrieben.
 \label{sec:shared_memory_hysteresis}
 
 \texttt{hysteresis\_sharedm()} lädt zunächst gemeinsam mit allen Threads eines
-Blocks eine Kachel in den Shared Memory. Weil jedes Pixel seine unmittelbare
+Blocks eine Kachel in den Shared Memory. Weil jeder Pixel seine unmittelbare
 Nachbarschaft benötigt, wird die Kachel an jeder Seite um einen Pixel als Halo
 erweitert. Randthreads laden die Seiten und Ecken des Halos; außerhalb des
-Bildes liegende Positionen werden mit 0 gefüllt. Erst nach
-\texttt{\_\_syncthreads()} beginnt die Klassifikation. Die acht Nachbarn eines
+Bildes liegende Positionen werden mit 0 gefüllt. Die acht Nachbarn eines
 schwachen Pixels werden dann aus dem Shared Memory gelesen, wodurch dieselben
 Global-Memory-Werte nicht für jeden Nachbarschaftszugriff erneut geladen werden
 müssen.
 
 \subsubsection{Optimierte Variante und Randbehandlung}
 
-Die Variante \texttt{hysteresis\_opt()} verzichtet auf Shared-Memory-Tiling.
+Die Variante \texttt{hysteresis\_opt()} verzichtet auf Shared-Memory-Tiling (weil dieses auch hier wie im Sobel-Schritt keine Laufzeitverbesserung gebracht hat).
 Für innere Pixel werden die acht Nachbarzugriffe stattdessen vollständig
-entrollt. Das reduziert Schleifen- und Indexierungs-Overhead, führt aber zu
-mehreren direkten Global-Memory-Zugriffen.
+entrollt. Das reduziert Schleifen- und Indexierungs-Overhead.
 
 Bei Randpixeln sind nicht alle acht Nachbarschaftspositionen gültig. Deshalb
 verwendet der optimierte Kernel für innere Pixel den schnellen unrolled Pfad
@@ -100,17 +61,3 @@ und für Randpixel eine separate, bounds-geprüfte Nachbarschaftsschleife. So
 werden weder negative Indizes noch Zugriffe hinter dem Bildende erzeugt,
 während schwache Randpixel weiterhin von tatsächlich vorhandenen starken
 Nachbarn übernommen werden können.
-
-Die Kernel-Konfiguration wird über \texttt{HYSTERESIS\_OPT} zur Compile-Zeit
-ausgewählt. Die isolierte Funktion \texttt{hysteresis\_execute()} legt die
-Device-Puffer an, überträgt das NMS-Ergebnis per H2D-Kopie, startet den
-gewählten Kernel und kopiert das binäre Ergebnis per D2H-Kopie zurück. CUDA-
-Events messen die drei Teilzeiten separat. Die optionale Pinned-Memory-Variante
-verwendet für den Host-Ausgabepuffer \texttt{cudaMallocHost()}, während die
-Kernelberechnung unverändert bleibt.
-
-Für die gefaltete Pipeline existiert \texttt{hysteresis\_launch()}. Die
-Funktion startet den ausgewählten Kernel auf einem bereits vorhandenen
-Device-Puffer und führt keine eigene Allokation oder Host-Übertragung aus.
-Dadurch kann die Hysteresis direkt an die NMS-Ausgabe im selben CUDA-Stream
-angeschlossen werden.

@@ -1,1 +1,30 @@
-\subsubsection{Schritt 4: Hysteresis}
+\subsubsection{Schritt 4: Hysteresis Thresholding}
+Nach der Non-Maximum Suppression liegt ein Bild vor, in dem Kanten bereits auf
+eine Breite von einem Pixel reduziert wurden, das jedoch noch immer
+Kantenpunkte unterschiedlichster Stärke enthält -- darunter auch solche, die
+auf Bildrauschen oder schwachen, irrelevanten Intensitätsschwankungen
+beruhen. Der letzte Schritt des Canny-Algorithmus, das
+Hysteresis-Thresholding, dient dazu, aus dieser Menge an Kandidaten die
+tatsächlich relevanten Kanten zu extrahieren.
+
+Der Canny-Algorithmus löst dieses Problem durch die Einführung zweier Schwellwerte, eines
+oberen Schwellwerts $T_{\text{high}}$ und eines unteren Schwellwerts
+$T_{\text{low}}$, wobei üblicherweise $T_{\text{high}} = 2 \cdot T_{\text{low}}$
+bis $T_{\text{high}} = 3 \cdot T_{\text{low}}$ gewählt wird \cite[S. 732.]{gonzalez_digital_2018}. Anhand dieser beiden
+Schwellwerte werden alle Kantenpixel in drei Kategorien eingeteilt:
+
+\begin{itemize}
+    \item \textbf{Starke Kanten} ($G(x,y) \geq T_{\text{high}}$): Diese Pixel
+    werden unmittelbar als sichere Kantenpunkte übernommen.
+    \item \textbf{Schwache Kanten} ($T_{\text{low}} \leq G(x,y) \leq
+    T_{\text{high}}$): Diese Pixel sind Kandidaten, deren endgültige
+    Klassifikation von ihrer Nachbarschaft zu starken Kanten abhängt.
+    \item \textbf{Kein Kantenpixel} ($G(x,y) < T_{\text{low}}$): Diese Pixel
+    werden sofort und endgültig verworfen.
+\end{itemize}
+
+Der eigentliche Hysteresis-Algorithmus besteht darin, dass ein schwacher
+Kantenpixel nur dann übernommen wird, wenn er
+über eine Kette benachbarter Pixel (üblicherweise 8-Konnektivität, also die direkten Nachbarn) mit
+mindestens einem starken Kantenpixel verbunden ist. Dies kann entweder in einem einzigen Schritt geschehen oder aber iterativ, um Ketten von starken Kantenpixeln basierend auf vorherigen Schritten zu kreieren. Da in \cite{gonzalez_digital_2018} nur ein Durchlauf besprochen wird, wird auch die Implementierung in dieser Arbeit nur einen Schritt durchführen. Es wäre aber möglich, auch iterativ vorzugehen und den Hysteresis-Schritt mehrfach durchlaufen zu lassen, bis sich keine Änderungen mehr ergeben (sprich keine schwachen Pixel mehr in starke umgewandelt werden). Dies kann entweder durch eine lineare Suche geschehen, indem ausgehend von einem starken Pixel die Nachbarschaft abgesucht wird, und dann jeder weitere starke Pixel bzw. schwache Pixel (der ja nun als stark markiert wurde durch seine Nachbarschaft zu einem starken Pixel) in der Nachbarschaft wiederum als Ausgangspunkt für eine neue Suche genommen wird. Dieses Vorgehen ist jedoch nicht gut parallelisierbar, weshalb für diese Arbeit eine andere, deutlich reduzierte Implementierung gewählt wurde (siehe den entsprechenden Abschnitt im Implementierungskapitel).
+

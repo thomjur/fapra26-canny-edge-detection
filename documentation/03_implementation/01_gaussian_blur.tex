@@ -51,51 +51,17 @@ resultierende $3 \times 3$ Gewichtsraster für $\sigma = 1.0$.
     \label{fig:gaussian_example}
 \end{figure}
 
-Listing~\ref{lst:gaussian_kernel} zeigt den naiven Kernel
-\texttt{gaussian\_filter()}: jeder Thread berechnet einen Ausgabepixel
-als gewichtete Summe seiner $(2r+1)^2$ Nachbarn, mit Zero-Padding am
-Bildrand. Die Threads eines Blocks greifen dabei in y-Richtung auf
-Adressen mit Abstand \texttt{width} zu, wodurch die Zugriffe auf den
-globalen Speicher nicht coalesced erfolgen, was die in
-Abschnitt~\ref{sec:shared_memory_gaussian} beschriebene Shared Memory
-Optimierung motiviert; die quantitative Auswertung findet sich in
-Abschnitt~\ref{sec:results_gaussian}.
-
-\begin{lstlisting}[style=cuda, basicstyle=\ttfamily\scriptsize,
-    caption={gaussian\_filter Kernel},
-    label={lst:gaussian_kernel}, numbers=left]
-__global__ void gaussian_filter(const uint8_t* src_buffer, const int32_t width,
-    const int32_t height, const float* weights, const uint32_t blur_radius,
-    uint8_t* out_dst_buffer)
-{
-    // globale Pixelposition, out-of-bounds Threads verwerfen
-    const auto x = static_cast<int32_t>(blockIdx.x * blockDim.x + threadIdx.x);
-    const auto y = static_cast<int32_t>(blockIdx.y * blockDim.y + threadIdx.y);
-    if (x >= width || y >= height)
-        return;
-
-    // Gewichtete Summe der Nachbarpixel akkumulieren (Zero-Padding am Rand)
-    float color       = 0.0f;
-    const auto radius = static_cast<int32_t>(blur_radius);
-    for (int32_t y_ = -radius; y_ <= radius; y_++)
-    {
-        for (int32_t x_ = -radius; x_ <= radius; x_++)
-        {
-            // Pixel ausserhalb der Bildgrenzen mit 0 auffuellen
-            uint8_t pixel = 0;
-            if (x + x_ >= 0 && x + x_ < width && y + y_ >= 0 && y + y_ < height)
-                pixel = src_buffer[(y + y_) * width + (x + x_)];
-
-            // strided access mit Abstand width
-            const uint32_t weight_idx =
-                (y_ + radius) * (blur_radius * 2 + 1) + (x_ + radius);
-            color += pixel * weights[weight_idx];
-        }
-    }
-
-    out_dst_buffer[y * width + x] = static_cast<uint8_t>(color);
-}
-\end{lstlisting}
+Im CUDA-Kernel \texttt{gaussian\_filter()} ist jeder Thread für genau
+einen Ausgabepixel zuständig; Threads außerhalb der Bildgrenzen werden
+sofort verworfen. Jeder Thread iteriert über alle $(2r+1)^2$
+Nachbarpixel, liest jeden Wert direkt aus dem globalen Speicher und
+akkumuliert die gewichtete Summe, wobei Pixel außerhalb der
+Bildgrenzen mit~0 aufgefüllt werden (Zero-Padding). Die Threads eines
+Blocks greifen dabei in y-Richtung auf Adressen mit Abstand
+\texttt{width} zu, wodurch die Zugriffe auf den globalen Speicher nicht
+coalesced erfolgen, was die in Abschnitt~\ref{sec:shared_memory_gaussian}
+beschriebene Shared Memory Optimierung motiviert; die quantitative
+Auswertung findet sich in Abschnitt~\ref{sec:results_gaussian}.
 
 \subsubsection{Shared Memory Optimierung}
 \label{sec:shared_memory_gaussian}

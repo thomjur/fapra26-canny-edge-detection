@@ -24,7 +24,7 @@ Total [ms]    &  0.000 & 1.347 & 0.000 & 1.390 &  0.000 & 1.330 \\
     \end{tabularx}
     \caption{Hysteresis Kernel. cudaEvent-Messungen. \\
         MS: Matthias Stefan, TJ: Thomas Jurczyk.}
-    \label{tab:hysteresis-results}
+    \label{tab:nms-bucket}
 \end{table}
 
 \begin{table}[H]
@@ -33,7 +33,7 @@ Total [ms]    &  0.000 & 1.347 & 0.000 & 1.390 &  0.000 & 1.330 \\
 Metrik (NCU, 10 Runs Avg) & naive & shared & opt \\
 \midrule
 Compute (SM) Throughput [\%]       & 33.57 & 41.65 & 33.60 \\
-Memory Throughput [\%]             & 94.22 & 59.97 & 102.73 \\
+Memory Throughput [\%]             & 42.91 & 36.04 & 33.96 \\
 DRAM Throughput [\%]               & 16.50 & 9.51 & 19.44 \\
 Achieved Occupancy [\%]            & 70.67 & 90.22 & 70.28 \\
 Warp Cycles Per Issued Instruction & 25.52 & 25.77 & 27.73 \\

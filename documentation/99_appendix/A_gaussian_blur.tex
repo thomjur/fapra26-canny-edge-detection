@@ -1,29 +1,25 @@
-\section{Gaussian Blur Messungen}
-\label{app:gaussian_results}
+\section{Performance-Rohdaten Gaussian Blur}
+\label{app:gaussian_rohdaten}
 
 \begin{table}[H]
-    \setlength{\tabcolsep}{4pt}
-    \begin{tabularx}{\textwidth}{l RR RR RR}
+    \begin{tabularx}{\textwidth}{lRRR}
 \toprule
-& \multicolumn{2}{c}{naive} & \multicolumn{2}{c}{shared} & \multicolumn{2}{c}{pinned} \\
-\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
-Metrik & MS & TJ & MS & TJ & MS & TJ \\
+Metrik & naive & shared & pinned \\
 \midrule
-\multicolumn{7}{l}{\textit{Warm-up Run}} \\
-H$\to$D [ms]  &  3.062 & 0.000 &  5.660 & 0.000 &  2.709 & 0.000 \\
-Kernel [ms]   &  2.606 & 0.000 &  1.697 & 0.000 &  1.688 & 0.000 \\
-D$\to$H [ms]  &  7.631 & 0.000 &  7.020 & 0.000 &  2.502 & 0.000 \\
-Total [ms]    & 13.299 & 0.000 & 14.377 & 0.000 &  6.899 & 0.000 \\
+\multicolumn{4}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  3.062 &  5.660 &  2.709 \\
+Kernel [ms]   &  2.606 &  1.697 &  1.688 \\
+D$\to$H [ms]  &  7.631 &  7.020 &  2.502 \\
+Total [ms]    & 13.299 & 14.377 &  6.899 \\
 \midrule
-\multicolumn{7}{l}{\textit{200 Runs Avg}} \\
-H$\to$D [ms]  &  3.548 & 0.000 &  3.475 & 0.000 &  3.135 & 0.000 \\
-Kernel [ms]   &  1.669 & 0.000 &  0.990 & 0.000 &  0.987 & 0.000 \\
-D$\to$H [ms]  &  3.068 & 0.000 &  3.001 & 0.000 &  1.740 & 0.000 \\
-Total [ms]    &  8.286 & 0.000 &  7.466 & 0.000 &  5.862 & 0.000 \\
+\multicolumn{4}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  3.548 &  3.475 &  3.135 \\
+Kernel [ms]   &  1.669 &  0.990 &  0.987 \\
+D$\to$H [ms]  &  3.068 &  3.001 &  1.740 \\
+Total [ms]    &  8.286 &  7.466 &  5.862 \\
 \bottomrule
     \end{tabularx}
-    \caption{cudaEvent-Messungen, \texttt{BLUR\_RADIUS = 2}.
-    MS: Matthias/Stefan, TJ: Thomas Jurczyk.}
+    \caption{cudaEvent-Messungen, BLUR\_RADIUS = 2}
 \end{table}
 
 \begin{table}[H]
@@ -40,32 +36,28 @@ L1/TEX Hit Rate [\%]               & 92.94 & 27.32 & 27.29 \\
 L2 Hit Rate [\%]                   & 87.75 & 88.17 & 89.12 \\
 \bottomrule
     \end{tabularx}
-    \caption{NCU-Profiling, \texttt{BLUR\_RADIUS = 2}}
+    \caption{NCU-Profiling, BLUR\_RADIUS = 2}
 \end{table}
 
 \begin{table}[H]
-    \setlength{\tabcolsep}{4pt}
-    \begin{tabularx}{\textwidth}{l RR RR RR}
+    \begin{tabularx}{\textwidth}{lRRR}
 \toprule
-& \multicolumn{2}{c}{naive} & \multicolumn{2}{c}{shared} & \multicolumn{2}{c}{pinned} \\
-\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
-Metrik & MS & TJ & MS & TJ & MS & TJ \\
+Metrik & naive & shared & pinned \\
 \midrule
-\multicolumn{7}{l}{\textit{Warm-up Run}} \\
-H$\to$D [ms]  &  2.589 & 0.000 &  1.757 & 0.000 &  1.781 & 0.000 \\
-Kernel [ms]   & 35.700 & 0.000 & 12.575 & 0.000 & 13.182 & 0.000 \\
-D$\to$H [ms]  &  6.035 & 0.000 &  6.183 & 0.000 &  1.836 & 0.000 \\
-Total [ms]    & 44.324 & 0.000 & 20.515 & 0.000 & 16.799 & 0.000 \\
+\multicolumn{4}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  2.589 &  1.757 &  1.781 \\
+Kernel [ms]   & 35.700 & 12.575 & 13.182 \\
+D$\to$H [ms]  &  6.035 &  6.183 &  1.836 \\
+Total [ms]    & 44.324 & 20.515 & 16.799 \\
 \midrule
-\multicolumn{7}{l}{\textit{200 Runs Avg}} \\
-H$\to$D [ms]  &  2.512 & 0.000 &  2.375 & 0.000 &  2.057 & 0.000 \\
-Kernel [ms]   & 22.669 & 0.000 &  7.537 & 0.000 &  7.325 & 0.000 \\
-D$\to$H [ms]  &  2.142 & 0.000 &  2.036 & 0.000 &  1.366 & 0.000 \\
-Total [ms]    & 27.308 & 0.000 & 11.948 & 0.000 & 10.747 & 0.000 \\
+\multicolumn{4}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  2.512 &  2.375 &  2.057 \\
+Kernel [ms]   & 22.669 &  7.537 &  7.325 \\
+D$\to$H [ms]  &  2.142 &  2.036 &  1.366 \\
+Total [ms]    & 27.308 & 11.948 & 10.747 \\
 \bottomrule
     \end{tabularx}
-    \caption{cudaEvent-Messungen, \texttt{BLUR\_RADIUS = 9}.
-    MS: Matthias Stefan, TJ: Thomas Jurczyk.}
+    \caption{cudaEvent-Messungen, BLUR\_RADIUS = 9}
 \end{table}
 
 \begin{table}[H]
@@ -82,5 +74,5 @@ L1/TEX Hit Rate [\%]               & 99.27 & 45.55 & 45.54 \\
 L2 Hit Rate [\%]                   & 63.36 & 82.96 & 87.35 \\
 \bottomrule
     \end{tabularx}
-    \caption{NCU-Profiling, \texttt{BLUR\_RADIUS = 9}}
+    \caption{NCU-Profiling, BLUR\_RADIUS = 9}
 \end{table}
