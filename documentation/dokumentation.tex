@@ -22,6 +22,7 @@
 \usepackage{float}
 \usepackage{tabularx}
 \usepackage{csquotes}
+\usepackage{pdflscape}
 \newcolumntype{R}{>{\raggedleft\arraybackslash}X}
 
 \geometry{margin=2.5cm}
@@ -56,6 +57,7 @@
     \section{Voraussetzungen und Projektaufbau}
     \label{sec:voraussetzungen-und-projektaufbau}
 % ════════════════════════════════════════════════════════════════════════════
+    \input{01_prerequisites_and_project_structure/00_introduction}
     \input{01_prerequisites_and_project_structure/01_hardware_specifications}
     \input{01_prerequisites_and_project_structure/02_projektstruktur}
     \input{01_prerequisites_and_project_structure/03_build_system_and_compilation}
@@ -92,6 +94,7 @@
     \input{04_results_and_analysis/02_sobel}
     \input{04_results_and_analysis/03_non_maximum_suppression}
     \input{04_results_and_analysis/04_hysteresis}
+    \input{04_results_and_analysis/05_fused}
     \newpage
 
 % ════════════════════════════════════════════════════════════════════════════

@@ -1,2 +1,37 @@
 \subsection{Fazit}
 \label{subsec:fazit}
+
+Über alle vier Pipeline-Stufen zeigt sich ein klares Muster: Shared Memory
+Tiling lohnt sich nur dort, wo redundante Global-Memory-Zugriffe stark ins
+Gewicht fallen, etwa beim Gaussian Blur mit großem Radius
+(Abschnitt~\ref{sec:results_gaussian}). Bei den kleinen Nachbarschaften von
+Sobel, NMS und Hysteresis überwiegt dagegen der Synchronisations-Overhead,
+sodass die naive bzw. unrolled Variante schneller bleibt. Pinned Memory
+verbessert durchgängig den D$\to$H-Transfer, ohne den Kernel zu verändern.
+Den größten Effekt erzielt die Fused Pipeline
+(Abschnitt~\ref{sec:results_fused}), die durch den Wegfall der
+Zwischentransfers die Gesamtlaufzeit um über 80\,\% reduziert.
+
+Aus der Sicht von Matthias Stefan zeigte dieses Praktikum insbesondere die
+Herausforderungen sauberen Performance-Messens in der Praxis auf: Ohne
+kontrollierte Laborbedingungen, etwa hinsichtlich konstanter GPU-Temperatur
+oder isolierter Hintergrundprozesse (vgl.
+Abschnitt~\ref{subsec:messmethodologie}), unterliegen Messwerte einer gewissen
+Schwankungsbreite. Daraus ergibt sich eine grundsätzlichere methodische
+Frage: Inwieweit sind unter Laborbedingungen gewonnene Messwerte
+aussagekräftig, wenn die Zielumgebung, insbesondere im Consumer-Bereich,
+diese Bedingungen ohnehin nie erfüllt? Realitätsnahe, durch
+Hintergrundlast beeinflusste Messbedingungen könnten den späteren
+Einsatzkontext unter Umständen treffender abbilden als ein steriles
+Setup. Die im Praktikum gewonnenen Erkenntnisse zu Speicherzugriffsmustern
+und Transfer-Overhead sind zudem auf angrenzende Bereiche wie
+3D-Rendering und Vulkan übertragbar.
+
+Aus der Sicht von Thomas Jurczyk <<<TODO>>>
+
+Als Ausblick bleibt festzuhalten, dass sich alle Messungen auf ein einzelnes,
+wenn auch großes Bild (5120$\times$2880) beschränken. Effekte wie
+Speicherbandbreitenlimitierung oder Occupancy-Grenzen dürften bei deutlich
+größeren oder kleineren Bildgrößen anders bzw. stärker ausfallen, sodass eine
+systematische Analyse über mehrere Bildgrößen hinweg ein sinnvoller nächster
+Schritt wäre.

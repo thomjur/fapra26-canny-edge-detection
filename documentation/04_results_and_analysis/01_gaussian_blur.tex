@@ -23,14 +23,12 @@ Global Memory Zugriffe uncoalesced sind, was die in
 Abschnitt~\ref{sec:shared_memory_gaussian} beschriebene Shared Memory
 Optimierung motiviert.
 
-Der gemessene Speedup hängt stark vom \texttt{BLUR\_RADIUS} ab
-(Abbildung~\ref{fig:gaussian_ncu}). Bei $r=2$ überwiegt der
-\texttt{\_\_syncthreads()}-Overhead, sodass die Kernel-Laufzeit bei
-nahezu identischem SM Throughput nur marginal sinkt. Bei $r=9$ kehrt
-sich das Verhältnis um, da die $361$ Faltungsoperationen pro Pixel den
-redundanten DRAM-Traffic zum dominanten Faktor machen, wodurch Shared
-Memory einen Speedup von $3.0\times$ bei deutlich gesteigertem SM
-Throughput erzielt.
+Der gemessene Speedup hängt stark vom \texttt{BLUR\_RADIUS} ab (Abbildung~\ref{fig:gaussian_ncu}).
+Bei $r=2$ sinkt die Kernel-Laufzeit trotz nahezu identischem SM Throughput
+bereits um 40.7\,\% (1.69$\times$), bei r = 9 verstärkt sich dieser Effekt
+auf einen Speedup von 3.0$\times$ bei deutlich gesteigertem SM Throughput,
+da hier die 361 Faltungsoperationen pro Pixel den redundanten
+DRAM-Traffic zum dominanten Faktor machen.
 
 Die Pinned-Memory-Variante bestätigt, dass Compute Throughput und
 Occupancy bei $r=9$ praktisch identisch zur Shared Memory Variante

@@ -1,0 +1,21 @@
+\subsection{Einleitung}
+\label{subsec:introduction}
+
+Dieser Bericht dokumentiert die im Rahmen des CUDA-Praktikums entstandene
+Implementierung der Canny Edge Detection auf der GPU. Ziel war es, die
+einzelnen Stufen des Algorithmus, namentlich Gaussian Blur, Sobel-Filter,
+Non-Maximum Suppression und Hysteresis Thresholding, als eigene
+CUDA-Kernel umzusetzen und in mehreren Optimierungsstufen (naiv, Shared
+Memory, Pinned Memory, sowie stufenspezifische weitere Optimierungen)
+gegeneinander zu messen und zu analysieren.
+
+Der Bericht gliedert sich in fünf Abschnitte: Zunächst werden die
+Rahmenbedingungen des Projekts sowie die verwendete Messmethodik
+beschrieben (Abschnitt~\ref{sec:voraussetzungen-und-projektaufbau}),
+gefolgt von einer theoretischen Einordnung des Canny-Algorithmus
+(Abschnitt~\ref{sec:algorithmus}). Anschließend werden die konkreten
+CUDA-Implementierungen der vier Pipeline-Schritte vorgestellt
+(Abschnitt~\ref{sec:implementierung}) und deren Performance anhand von
+Laufzeitmessungen sowie NCU-Profiling ausgewertet
+(Abschnitt~\ref{sec:ergebnisse-und-analyse}). Den Abschluss bildet ein
+gemeinsames Fazit (Abschnitt~\ref{sec:fazit}).

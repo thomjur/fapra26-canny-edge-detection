@@ -10,21 +10,21 @@
 Metrik & MS & TJ & MS & TJ & MS & TJ \\
 \midrule
 \multicolumn{7}{l}{\textit{Warm-up Run}} \\
-H$\to$D [ms]  &  0.000 & 0.926 &  0.000 & 0.860 &  0.000 & 0.922 \\
-Kernel [ms]   &  0.000 & 0.090 &  0.000 & 0.152 &  0.000 & 0.071 \\
-D$\to$H [ms]  &  0.000 & 3.408 &  0.000 & 3.439 &  0.000 & 3.517 \\
-Total [ms]    & 0.000 & 4.425 & 0.000 & 4.451 &  0.000 & 4.511 \\
+H$\to$D [ms]  &  2.954 & 0.926 &  1.844 & 0.860 &  1.872 & 0.922 \\
+Kernel [ms]   &  0.477 & 0.090 &  0.794 & 0.152 &  0.421 & 0.071 \\
+D$\to$H [ms]  &  5.056 & 3.408 &  5.069 & 3.439 &  7.582 & 3.517 \\
+Total [ms]    &  8.487 & 4.425 &  7.707 & 4.451 &  9.875 & 4.511 \\
 \midrule
 \multicolumn{7}{l}{\textit{200 Runs Avg}} \\
-H$\to$D [ms]  &  0.000 & 0.593 &  0.000 & 0.587 &  0.000 & 0.587 \\
-Kernel [ms]   &  0.000 & 0.097 &  0.000 & 0.157 &  0.000 & 0.081 \\
-D$\to$H [ms]  &  0.000 & 0.657 &  0.000 & 0.646 &  0.000 & 0.663 \\
-Total [ms]    &  0.000 & 1.347 & 0.000 & 1.390 &  0.000 & 1.330 \\
+H$\to$D [ms]  &  2.093 & 0.593 &  1.643 & 0.587 &  1.651 & 0.587 \\
+Kernel [ms]   &  0.481 & 0.097 &  0.783 & 0.157 &  0.401 & 0.081 \\
+D$\to$H [ms]  &  1.901 & 0.657 &  1.739 & 0.646 &  1.771 & 0.663 \\
+Total [ms]    &  4.475 & 1.347 &  4.164 & 1.390 &  3.823 & 1.330 \\
 \bottomrule
     \end{tabularx}
     \caption{Hysteresis Kernel. cudaEvent-Messungen. \\
         MS: Matthias Stefan, TJ: Thomas Jurczyk.}
-    \label{tab:nms-bucket}
+    \label{tab:hysteresis}
 \end{table}
 
 \begin{table}[H]
