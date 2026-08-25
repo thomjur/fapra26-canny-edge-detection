@@ -2,25 +2,30 @@
 \label{app:gaussian_rohdaten}
 
 \begin{table}[H]
-    \begin{tabularx}{\textwidth}{lRRR}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabularx}{\textwidth}{l RR RR RR}
 \toprule
-Metrik & naive & shared & pinned \\
+& \multicolumn{2}{c}{naive} & \multicolumn{2}{c}{shared} & \multicolumn{2}{c}{pinned} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+Metrik & MS & TJ & MS & TJ & MS & TJ \\
 \midrule
-\multicolumn{4}{l}{\textit{Warm-up Run}} \\
-H$\to$D [ms]  &  3.062 &  5.660 &  2.709 \\
-Kernel [ms]   &  2.606 &  1.697 &  1.688 \\
-D$\to$H [ms]  &  7.631 &  7.020 &  2.502 \\
-Total [ms]    & 13.299 & 14.377 &  6.899 \\
+\multicolumn{7}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  3.062 & 0.781 &  5.660 & 0.767 &  2.709 & 0.802 \\
+Kernel [ms]   &  2.606 & 0.456 &  1.697 & 0.220 &  1.688 & 0.221 \\
+D$\to$H [ms]  &  7.631 & 2.901 &  7.020 & 2.830 &  2.502 & 0.522 \\
+Total [ms]    & 13.299 & 4.139 & 14.377 & 3.817 &  6.899 & 1.545 \\
 \midrule
-\multicolumn{4}{l}{\textit{200 Runs Avg}} \\
-H$\to$D [ms]  &  3.548 &  3.475 &  3.135 \\
-Kernel [ms]   &  1.669 &  0.990 &  0.987 \\
-D$\to$H [ms]  &  3.068 &  3.001 &  1.740 \\
-Total [ms]    &  8.286 &  7.466 &  5.862 \\
+\multicolumn{7}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  3.548 & 0.611 &  3.475 & 0.575 &  3.135 & 0.581 \\
+Kernel [ms]   &  1.669 & 0.357 &  0.990 & 0.214 &  0.987 & 0.215 \\
+D$\to$H [ms]  &  3.068 & 0.735 &  3.001 & 0.699 &  1.740 & 0.522 \\
+Total [ms]    &  8.286 & 1.703 &  7.466 & 1.488 &  5.862 & 1.317 \\
 \bottomrule
     \end{tabularx}
-    \caption{cudaEvent-Messungen, BLUR\_RADIUS = 2}
+    \caption{cudaEvent-Messungen, BLUR\_RADIUS = 2. MS: Matthias Stefan, TJ: Thomas Jurczyk.}
+    \label{tab:gaussian-blur}
 \end{table}
+
 
 \begin{table}[H]
     \begin{tabularx}{\textwidth}{lRRR}
@@ -39,25 +44,30 @@ L2 Hit Rate [\%]                   & 87.75 & 88.17 & 89.12 \\
     \caption{NCU-Profiling, BLUR\_RADIUS = 2}
 \end{table}
 
+
 \begin{table}[H]
-    \begin{tabularx}{\textwidth}{lRRR}
+    \setlength{\tabcolsep}{4pt}
+    \begin{tabularx}{\textwidth}{l RR RR RR}
 \toprule
-Metrik & naive & shared & pinned \\
+& \multicolumn{2}{c}{naive} & \multicolumn{2}{c}{shared} & \multicolumn{2}{c}{pinned} \\
+\cmidrule(lr){2-3} \cmidrule(lr){4-5} \cmidrule(lr){6-7}
+Metrik & MS & TJ & MS & TJ & MS & TJ \\
 \midrule
-\multicolumn{4}{l}{\textit{Warm-up Run}} \\
-H$\to$D [ms]  &  2.589 &  1.757 &  1.781 \\
-Kernel [ms]   & 35.700 & 12.575 & 13.182 \\
-D$\to$H [ms]  &  6.035 &  6.183 &  1.836 \\
-Total [ms]    & 44.324 & 20.515 & 16.799 \\
+\multicolumn{7}{l}{\textit{Warm-up Run}} \\
+H$\to$D [ms]  &  2.589 & 0.748 &  1.757 & 0.748 &  1.781 & 0.822 \\
+Kernel [ms]   & 35.700 & 3.812 & 12.575 & 1.754 & 13.182 & 1.753 \\
+D$\to$H [ms]  &  6.035 & 2.865 &  6.183 & 2.809 &  1.836 & 0.522 \\
+Total [ms]    & 44.324 & 7.425 & 20.515 & 5.310 & 16.799 & 3.097 \\
 \midrule
-\multicolumn{4}{l}{\textit{200 Runs Avg}} \\
-H$\to$D [ms]  &  2.512 &  2.375 &  2.057 \\
-Kernel [ms]   & 22.669 &  7.537 &  7.325 \\
-D$\to$H [ms]  &  2.142 &  2.036 &  1.366 \\
-Total [ms]    & 27.308 & 11.948 & 10.747 \\
+\multicolumn{7}{l}{\textit{200 Runs Avg}} \\
+H$\to$D [ms]  &  2.512 & 0.576 &  2.375 & 0.579 &  2.057 & 0.578 \\
+Kernel [ms]   & 22.669 & 3.724 &  7.537 & 1.752 &  7.325 & 1.757 \\
+D$\to$H [ms]  &  2.142 & 0.690 &  2.036 & 0.689 &  1.366 & 0.528 \\
+Total [ms]    & 27.308 & 4.990 & 11.948 & 3.020 & 10.747 & 2.864 \\
 \bottomrule
     \end{tabularx}
-    \caption{cudaEvent-Messungen, BLUR\_RADIUS = 9}
+    \caption{cudaEvent-Messungen, BLUR\_RADIUS = 9. MS: Matthias Stefan, TJ: Thomas Jurczyk.}
+    \label{tab:gaussian-blur-r9}
 \end{table}
 
 \begin{table}[H]

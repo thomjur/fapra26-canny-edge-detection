@@ -1,6 +1,16 @@
 \subsection{Schritt 4: Hysteresis}
 \label{sec:results_hysteresis}
 
+\subsubsection{Korrektheit}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{98_assets/hysteresis.png}
+    \caption{Gesamtansicht des Hysteresis Bildes. Es ist gut erkennbar, dass die einfache Durchführung des Hysteresis-Schritts dazu führt, dass die Linienführung insgesamt fragmentiert wirkt, da es nur wenige starke Pixel gibt.}
+    \label{fig:hysteresis_result}
+\end{figure}
+
+Im finalen Output des Hysteresis-Schritts wird deutlich, dass dieser zwar so wie erwartet funktioniert, dass die Linienführung insgesamt aber sehr fragmentiert ist, was dafür spricht, dass in einer realen Anwendung dieser Schritt mehrfach hintereinander ausgeführt werden sollte, um längere Verkettungen von starken und schwachen Bildpunkten zu bilden.
+
 \subsubsection{Performance}
 
 Die folgenden Laufzeitwerte entsprechen der TJ-Spalte

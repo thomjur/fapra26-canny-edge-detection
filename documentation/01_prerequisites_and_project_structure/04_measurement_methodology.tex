@@ -13,10 +13,15 @@ Zeitpunkt noch nicht aufgewärmt sind. NCU-Profiling wurde mit 10
 Kernel-Instanzen pro Report durchgeführt, der Warm-up Run wurde dabei
 ausgeschlossen. Gemessen wurde lediglich mit einem Bild, das allerdings relativ groß ist und eine realistisches Beispiel für Bildbearbeitung darstellt (5120x2880 Pixel). Wir sind uns bewusst, dass dies prinzipiell problematisch ist und eine erweiterte Analyse auch andere Bildgrößen beinhalten sollte.
 
-Abseits des Gaussian Blur Schritts, der nur von Matthias Stefan gemessen wurde, haben wir alle drei weiteren Schritte auf beiden Systemen gemessen. Auch wurde von uns beiden die Laufzeit der gesamten Pipeline gemessen (sowohl die Fused Pipeline als auch die nicht-optimierte Version mit vielen H$\to$D/D$\to$H Transfers). Die Messdaten sind im Appendix beigefügt.
+Alle vier Schritte der Canny-Pipeline wurden auf beiden Systemen gemessen. Auch wurde von uns beiden die Laufzeit der gesamten Pipeline gemessen (sowohl die Fused Pipeline als auch die nicht-optimierte Version mit vielen H$\to$D/D$\to$H Transfers). Die Messdaten sind im Appendix beigefügt und werden in den folgenden Sektionen diskutiert.
 
-Neben der Laufzeitmessung, die innerhalb des Programmcodes verortet ist, wurde außerdem NCU verwendet. Dazu wurden zuerst alle Messwerte erhoben und diese folgend mit einem Python Script auf eine Auswahl reduziert. Für die Messung wurde folgender Befehl verwendet (hier beispielhaft für die Messung des naiven Sobel Kernels):
+Neben der Laufzeitmessung, die innerhalb des Programmcodes verortet ist, wurde außerdem NCU verwendet. Dazu wurden zuerst alle NCU Messwerte erhoben (\texttt{-{}-set full}) und die Resultate mit einem Python Script auf eine Auswahl reduziert. Für die NCU Messung wurde folgender Befehl verwendet (hier beispielhaft für die Messung des naiven Sobel Kernels):
 
-\texttt{sudo ncu --set full -k regex:naive\_sobel\_filter \textbackslash\linebreak -s 0 -c 11 -f -o analysis/sobel\_naive.ncu-rep \textbackslash\linebreak ./bin/canny\_release.out ./assets/maple-leaf-black-5120x2880.jpg \textbackslash\linebreak /tmp/sobel-profile.png}
+\begin{verbatim}
+sudo ncu --set full -k regex:naive\_sobel\_filter \
+-s 0 -c 11 -f -o analysis/sobel\_naive.ncu-rep \
+./bin/canny\_release.out ./assets/maple-leaf-black-5120x2880.jpg \
+/tmp/sobel-profile.png
+\end{verbatim}
 
 Die Messung des Warmup-Runs wurde später im Python Script herausgefiltert.

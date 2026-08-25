@@ -2,7 +2,7 @@
 Nach dem Gauß-Filter folgt der Sobel Schritt, der es als Ziel hat, mit Hilfe des Sobel Kernels \cite[S. 716ff.]{gonzalez_digital_2018} für jeden Bildpunkt die Stärke und Richtung der stärksten Intensitätsänderung zu bestimmen, da diese durch den starken Kontrast auf Kanten hinweisen können.
 
 Der Sobel Filter nutzt dabei zwei $3 \times 3$-Faltungskerne, die die partiellen
-Ableitungen der Bildintensität $I$ in $x$- und $y$-Richtung approximieren:
+Ableitungen des Bildpunkte $I$ in $x$- und $y$-Richtung approximieren:
 
 \begin{equation}
     G_x =
@@ -24,7 +24,7 @@ Ableitungen der Bildintensität $I$ in $x$- und $y$-Richtung approximieren:
 
 Details zu diesen Kerneln und weitere Kernel wie den Prewitt-Kernel finden sich in der Literatur \cite{gonzalez_digital_2018} und sollen an dieser Stelle nicht weiter besprochen werden.
 
-Die Grundidee ist, dass aus den mit Hilfe der Kernel für jeden Bildpunkt $(x,y)$ berechneten Werten $G_x(x,y)$ und $G_y(x,y)$ die Gradientenstärke
+Die Grundidee ist, dass aus den mit Hilfe der Kernel für jeden Bildpunkt $(x,y)$ berechneten Werte $G_x(x,y)$ und $G_y(x,y)$ die Gradientenstärke
 
 \begin{equation}
     G(x,y) = \sqrt{G_x(x,y)^2 + G_y(x,y)^2}
@@ -36,18 +36,11 @@ sowie die Gradientenrichtung
     \theta(x,y) = \operatorname{atan2}\bigl(G_y(x,y),\, G_x(x,y)\bigr)
 \end{equation}
 
-berechnet werden. Für diese Formeln können jedoch auch effizientere Alternativen gewählt werden (siehe die folgende Sektion zur Implementierung und Optimierung). Die Verwendung von $\operatorname{atan2}$ anstelle von $\arctan(G_y/G_x)$ ist hierbei essenziell, da $\operatorname{atan2}$ beide
-Vorzeichen von $G_x$ und $G_y$ getrennt berücksichtigt und dadurch den
-korrekten Winkel im vollen Bereich $(-\pi, \pi]$ liefert, während der einfache
-Arkustangens aufgrund seines eingeschränkten Wertebereichs von
-$(-\pi/2, \pi/2)$ zwischen gegenüberliegenden Quadranten nicht unterscheiden
-kann.
-
-Wichtig ist, dass der Gradientenvektor $(G_x, G_y)$ in die
+berechnet werden. Für diese Formeln können jedoch auch effizientere Alternativen gewählt werden (siehe die folgende Sektion zur Implementierung und Optimierung). Wichtig ist, dass der Gradientenvektor $(G_x, G_y)$ in die
 Richtung des stärksten Intensitätsanstiegs zeigt, was aber nicht der Kantenrichtung entspricht (diese steht senkrecht zur Richtung der Intensitätsänderung). Die Kantenorientierung selbst ergibt sich somit als
 $\theta(x,y) + \tfrac{\pi}{2}$ (bzw.\ äquivalent $\theta(x,y) - \tfrac{\pi}{2}$).
 
-Für die Non-Maximum-Suppression wird üblicherweise direkt mit der
+Für die Non-Maximum-Suppression wird üblicherweise nicht direkt mit der
 Gradientenrichtung $\theta$ gearbeitet: Sie wird auf einen von vier diskreten
 Sektoren ($0^\circ$, $45^\circ$, $90^\circ$, $135^\circ$) quantisiert, um zu
 bestimmen, mit welchen Nachbarpixeln entlang der Gradientenrichtung die

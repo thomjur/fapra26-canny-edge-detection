@@ -1,5 +1,28 @@
 \subsection{Schritt 2: Sobel}
 \label{sec:results_sobel}
+\subsubsection{Korrektheit}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{98_assets/sobel_grad.png}
+    \caption{Ausschnitt des Sobel-Outputs der Gradientenwerte (limitiert auf 0-255).}
+    \label{fig:sobel_grad_result}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{98_assets/sobel_dir_normal.png}
+    \caption{Ausschnitt des Sobel-Outputs der Gradientenrichtungen, die von Radians auf den Wertebereich 0-255 übertragen wurden.}
+    \label{fig:sobel_dir_result}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{98_assets/sobel_dir_bucket.png}
+    \caption{Ausschnitt des Sobel-Outputs mit den Gradientenrichtungen in der Bucket-Variante, die in diesem Fall nur aus vier Richtungsbuckets bestehen und ebenfalls auf den Wertebereich 0-255 übertragen wurden.}
+    \label{fig:sobel_dir_bucket_result}
+\end{figure}
+
+Anhand der beigefügten Abbildungen ist ersichtlich, dass der Sobel-Schritt prinzipiell funktioniert, allerdings sind die Abbildungen selbst wenig aussagekräftig, weil es sich hierbei lediglich um Zwischenschritte in der Pipeline handelt und um keine eigentlichen Ausgabeformate (beispielsweise musste für die Darstellung der Gradientenrichtungen der Wertebereich von Radians auf 0-255 gecastet werden).
 
 \subsubsection{Performance}
 

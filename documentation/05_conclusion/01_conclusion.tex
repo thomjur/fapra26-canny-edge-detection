@@ -27,9 +27,9 @@ Setup. Die im Praktikum gewonnenen Erkenntnisse zu Speicherzugriffsmustern
 und Transfer-Overhead sind zudem auf angrenzende Bereiche wie
 3D-Rendering und Vulkan übertragbar.
 
-Aus der Sicht von Thomas Jurczyk <<<TODO>>>
+Aus der Sicht von Thomas Jurczyk hat sich während dieses Praktikums gezeigt, dass abhängig von der verwendeten Hardware und den Problemgrößen auf den ersten Blick \textit{low hanging fruits} wie Shared Memory trotzdem zu schlechteren Laufzeiten führen können und dass insbesondere eine hohe Hitrate des L1-Cache im SM der Grafikkarte sehr viel wettmachen kann. Außerdem wurde gerade bei ohnehin schon sehr kurzen Laufzeiten deutlich, dass auch allgemeine und GPU-unspezifische Optimierungen des Codes (Stichwort Unrolling, Bit-Shifting) und die Simplifizierung von Berechnungen (beispielsweise durch die Vermeidung von komplexen Bibliotheksfunktionen und die Bucket-Variante des Sobelfilters) zu Laufzeitverbesserungen führen können. Hier wäre es interessant zu untersuchen, ob dies in dem Maße auch mit höheren Programmiersprachen wie Python und deren CUDA-Verwendung möglich ist. Was leider in diesem Praktikum nicht mehr möglich war, aber in Zukunft genauer untersucht werden könnte, ist die Optimierung des Speicher-Coalescing und auch der allgemeinen Warp-Effizienz/Nutzung, die hier testweise versucht wurde, aber durch sich nicht/kaum verändernde Messergebnisse dann schnell wieder verworfen wurde.  
 
-Als Ausblick bleibt festzuhalten, dass sich alle Messungen auf ein einzelnes,
+Als abschließender Ausblick bleibt festzuhalten, dass sich alle Messungen auf ein einzelnes,
 wenn auch großes Bild (5120$\times$2880) beschränken. Effekte wie
 Speicherbandbreitenlimitierung oder Occupancy-Grenzen dürften bei deutlich
 größeren oder kleineren Bildgrößen anders bzw. stärker ausfallen, sodass eine

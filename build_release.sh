@@ -21,7 +21,8 @@
 #
 #   HYSTERESIS_OPT=0       naive         (default)
 #   HYSTERESIS_OPT=1       shared memory
-#   HYSTERESIS_OPT=2       shared memory + pinned memory
+#   HYSTERESIS_OPT=2       optimized
+#   HYSTERESIS_OPT=3       optimized + pinned memory
 #
 #   WARMUP=1        warm-up run enabled   (default)
 #   WARMUP=0        warm-up run disabled
