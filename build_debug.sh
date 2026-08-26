@@ -6,7 +6,7 @@
 # Options:
 #   GAUSSIAN_OPT=0  naive         (default)
 #   GAUSSIAN_OPT=1  shared memory
-#   GAUSSIAN_OPT=2  pinned memory
+#   GAUSSIAN_OPT=2  shared + pinned memory
 #
 #   SOBEL_OPT=0     naive         (default)
 #   SOBEL_OPT=1     shared memory
@@ -17,7 +17,7 @@
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory
-#   NMS_OPT=2       pinned memory
+#   NMS_OPT=2       shared + pinned memory
 #
 #   HYSTERESIS_OPT=0       naive         (default)
 #   HYSTERESIS_OPT=1       shared memory

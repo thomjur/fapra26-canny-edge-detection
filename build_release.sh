@@ -6,7 +6,7 @@
 # Options:
 #   GAUSSIAN_OPT=0  naive         (default)
 #   GAUSSIAN_OPT=1  shared memory
-#   GAUSSIAN_OPT=2  pinned memory
+#   GAUSSIAN_OPT=2  shared + pinned memory
 #
 #   SOBEL_OPT=0     naive         (default)
 #   SOBEL_OPT=1     shared memory
@@ -17,7 +17,7 @@
 #
 #   NMS_OPT=0       naive         (default)
 #   NMS_OPT=1       shared memory
-#   NMS_OPT=2       pinned memory
+#   NMS_OPT=2       shared + pinned memory
 #
 #   HYSTERESIS_OPT=0       naive         (default)
 #   HYSTERESIS_OPT=1       shared memory
@@ -35,14 +35,14 @@
 BIN_DIR="bin"
 BINARY="$BIN_DIR/canny_release.out"
 GAUSSIAN_OPT="${GAUSSIAN_OPT:-2}"
-SOBEL_OPT="${SOBEL_OPT:-4}"
-NMS_OPT="${NMS_OPT:-1}"
-HYSTERESIS_OPT="${HYSTERESIS_OPT:-2}"
+SOBEL_OPT="${SOBEL_OPT:-5}"
+NMS_OPT="${NMS_OPT:-2}"
+HYSTERESIS_OPT="${HYSTERESIS_OPT:-3}"
 WARMUP="${WARMUP:-0}"
 PIPELINE_FUSED="${PIPELINE_FUSED:-1}"
 BENCHMARK_RUNS="${BENCHMARK_RUNS:-1}"
-#ARCH="sm_75"
-ARCH="sm_120"
+#ARCH="sm_120"
+ARCH="sm_75"
 
 # fused end-to-end pipeline benchmark (single H2D/D2H, no host sync between
 # stages) -- must be defined for EVERY translation unit, since each .cu file
