@@ -40,7 +40,8 @@ HYSTERESIS_OPT="${HYSTERESIS_OPT:-0}"
 WARMUP="${WARMUP:-1}"
 PIPELINE_FUSED="${PIPELINE_FUSED:-1}"
 BENCHMARK_RUNS="${BENCHMARK_RUNS:-1}"
-ARCH="sm_120"
+#ARCH="sm_120"
+ARCH="sm_75"
 
 # fused end-to-end pipeline benchmark (single H2D/D2H, no host sync between
 # stages) -- must be defined for EVERY translation unit, since each .cu file

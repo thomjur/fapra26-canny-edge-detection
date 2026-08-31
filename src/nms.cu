@@ -231,7 +231,13 @@ __device__ __forceinline__ void load_magnitude_tile(
  */
 __device__ __forceinline__ uint8_t suppress(const uint8_t magnitude, const uint8_t neighbor_a, const uint8_t neighbor_b)
 {
+    // produces 2-3px wide edges instead of 1px on plateaus (equal neighbor values)
     return (magnitude >= neighbor_a && magnitude >= neighbor_b) ? magnitude : 0;
+    #if false
+    // 1px-thin, but can create real gaps in the edge at corners/curves
+    // (see maple-leaf test) -- not safe to use without a global tie-break
+    return (magnitude > neighbor_a && magnitude >= neighbor_b) ? magnitude : 0;
+    #endif
 }
 
 //

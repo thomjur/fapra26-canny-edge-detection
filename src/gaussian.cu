@@ -18,7 +18,7 @@ GaussianResult gaussian_execute(const uint8_t *host_src, const int32_t width, co
 {
     constexpr float sigma        = 1.4f;
     constexpr uint32_t blur_size = BLUR_RADIUS * 2 + 1;
-    const size_t img_size        = width * height * sizeof(uint8_t);
+    const size_t img_size = static_cast<size_t>(width) * static_cast<size_t>(height) * sizeof(uint8_t);
 
     // compute weights on host
     float weights[blur_size * blur_size];
@@ -190,8 +190,6 @@ __global__ void gaussian_filter(
     // global pixel position in the image
     const int32_t x = static_cast<int32_t>(blockIdx.x * blockDim.x + threadIdx.x);
     const int32_t y = static_cast<int32_t>(blockIdx.y * blockDim.y + threadIdx.y);
-    if (x >= width || y >= height)
-        return;
 
     // local thread position within the block (0..BLOCK_SIZE-1)
     // used to index into the shared memory tile
@@ -222,6 +220,11 @@ __global__ void gaussian_filter(
     // wait until every thread has finished loading before any thread starts
     // reading
     __syncthreads();
+
+    // bail out only AFTER every thread has helped fill shared memory and
+    // reached the barrier above
+    if (x >= width || y >= height)
+        return;
 
     // apply gaussian blur using values from shared memory tile
     float color = 0.0f;
