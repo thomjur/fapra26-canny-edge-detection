@@ -23,6 +23,9 @@
 \definecolor{cP5fill}{RGB}{240,222,201}   % Yadav & Gupta      -- Braun/Kupfer
 \definecolor{cP5border}{RGB}{150,92,38}
 
+\definecolor{cP6fill}{RGB}{220,235,245}   % Gonzalez & Woods   -- Blau
+\definecolor{cP6border}{RGB}{40,95,130}
+
 \begin{document}
     \begin{tikzpicture}[
         box/.style={rectangle, draw=black!60, rounded corners, minimum width=2.8cm,
@@ -62,8 +65,10 @@
         % --- Sobel ---
         \node[annot, fill=cP4fill, draw=cP4border, below=6mm of sobel]  (sobel1) {\textbf{\textcolor{cP4border}{Song~[4]}:} Local Memory für Faltung};
         \node[annot, fill=cP2fill, draw=cP2border, below=4mm of sobel1] (sobel2) {\textbf{\textcolor{cP2border}{Horvath~[2]}:} hypot/atan2 als Bottleneck $\rightarrow$ 8$\times$ schneller durch Konstanten};
+        \node[annot, fill=cP6fill, draw=cP6border, below=4mm of sobel2] (sobel3) {\textbf{\textcolor{cP6border}{Gonzalez \& Woods~[6]}:} vereinfachter Sobel-Gradient};
         \draw[link] (sobel.south) -- (sobel1.north);
         \draw[link] (sobel1.south) -- (sobel2.north);
+        \draw[link] (sobel2.south) -- (sobel3.north);
 
         % --- NMS ---
         \node[annot, fill=cP4fill, draw=cP4border, below=6mm of nms]  (nms1) {\textbf{\textcolor{cP4border}{Song~[4]}:} kein Tiling (nur 2 Nachbarn)};
@@ -75,7 +80,9 @@
 
         % --- Hysteresis ---
         \node[annot, fill=cP3fill, draw=cP3border, below=6mm of hyst] (hyst1) {\textbf{\textcolor{cP3border}{Ogawa~[3]}:} stack-basierte Traversierung (lange Kantenketten über Bildkacheln hinweg)};
+        \node[annot, fill=cP6fill, draw=cP6border, below=4mm of hyst1] (hyst2) {\textbf{\textcolor{cP6border}{Gonzalez \& Woods~[6]}:} Schwellwerte und simples Hysteresis-Thresholding};
         \draw[link] (hyst.south) -- (hyst1.north);
+        \draw[link] (hyst1.south) -- (hyst2.north);
 
         \node[anchor=north west, inner sep=0pt] (legend) at ($(input.west |- nms3.south) + (0,-6mm)$)
             {
@@ -86,6 +93,7 @@
                 \scriptsize [3] & \textcolor{cP3border}{\rule{0.3cm}{0.3cm}} & \scriptsize Ogawa, K., Ito, Y., \& Nakano, K. (2010). \textit{Efficient Canny Edge Detection Using a GPU}. IEEE IC-NC, 279--280. \\[3pt]
                 \scriptsize [4] & \textcolor{cP4border}{\rule{0.3cm}{0.3cm}} & \scriptsize Song, Y., Li, C., Xiao, S., Zhou, Q., \& Xiao, H. (2024). \textit{A Parallel Canny Edge Detection Algorithm Based on OpenCL Acceleration}. PLoS ONE, 19(1), e0292345. \\[3pt]
                 \scriptsize [5] & \textcolor{cP5border}{\rule{0.3cm}{0.3cm}} & \scriptsize Yadav, R., \& Gupta, H. (2025). \textit{Optimizing CUDA Kernels for High-Performance Canny Edge Detection}. IJSET, 13(4). \\
+                \scriptsize [6] & \textcolor{cP6border}{\rule{0.3cm}{0.3cm}} & \scriptsize Gonzalez, R. C., \& Woods, R. E. (2018). \textit{Digital Image Processing}. Fourth, Global edition. Pearson Education. \\
             \end{tabular}
         };
 
