@@ -209,15 +209,11 @@ __global__ void hysteresis_sharedm(uint8_t *src, const int32_t width,
   const int lx = threadIdx.x + 1;
   const int ly = threadIdx.y + 1;
 
-  // -------------------------------
   // 1) Load center pixel into shared memory
-  // -------------------------------
   tile[ly][lx] = (gx < width && gy < height) ? src[gy * width + gx] : 0;
 
-  // -------------------------------
   // 2) Load halo pixels (block borders)
   //    Only border threads do these loads
-  // -------------------------------
   if (threadIdx.x == 0) {
     tile[ly][0] = (gx > 0 && gy < height) ? src[gy * width + (gx - 1)] : 0;
   }
@@ -233,9 +229,7 @@ __global__ void hysteresis_sharedm(uint8_t *src, const int32_t width,
         (gy + 1 < height && gx < width) ? src[(gy + 1) * width + gx] : 0;
   }
 
-  // -------------------------------
   // 3) Load halo corners
-  // -------------------------------
   if (threadIdx.x == 0 && threadIdx.y == 0) {
     tile[0][0] = (gx > 0 && gy > 0) ? src[(gy - 1) * width + (gx - 1)] : 0;
   }
@@ -260,9 +254,7 @@ __global__ void hysteresis_sharedm(uint8_t *src, const int32_t width,
   if (gx >= width || gy >= height)
     return;
 
-  // -------------------------------
   // 4) Classify pixel
-  // -------------------------------
   const uint8_t p = tile[ly][lx];
   uint8_t out = 0;
 
@@ -370,44 +362,41 @@ __global__ void hysteresis_opt(uint8_t *src, const int32_t width,
 
 #ifdef PIPELINE_FUSED
 
-void hysteresis_launch(
-    const uint8_t *d_src,
-    uint8_t *d_dst,
-    int32_t width,
-    int32_t height,
-    cudaStream_t stream)
-{
-    // same block/grid layout as hysteresis_execute()
-    dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
-    dim3 grid_dim(static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
-                  static_cast<uint32_t>(std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
+void hysteresis_launch(const uint8_t *d_src, uint8_t *d_dst, int32_t width,
+                       int32_t height, cudaStream_t stream) {
+  // same block/grid layout as hysteresis_execute()
+  dim3 block_dim(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 grid_dim(
+      static_cast<uint32_t>(std::ceil(static_cast<float>(width) / BLOCK_SIZE)),
+      static_cast<uint32_t>(
+          std::ceil(static_cast<float>(height) / BLOCK_SIZE)));
 
-    #ifdef HIGH_THRESHOLD
-    uint8_t high_threshold = HIGH_THRESHOLD;
-    #else
-    uint8_t high_threshold = 150;
-    #endif
-    #ifdef LOW_THRESHOLD
-    uint8_t low_threshold = LOW_THRESHOLD;
-    #else
-    uint8_t low_threshold = 50;
-    #endif
+#ifdef HIGH_THRESHOLD
+  uint8_t high_threshold = HIGH_THRESHOLD;
+#else
+  uint8_t high_threshold = 150;
+#endif
+#ifdef LOW_THRESHOLD
+  uint8_t low_threshold = LOW_THRESHOLD;
+#else
+  uint8_t low_threshold = 50;
+#endif
 
-    // note: d_src is non-const in the kernel signatures (hysteresis_sharedm /
-    // hysteresis_opt take uint8_t*, not const uint8_t*), hence the cast
-    auto *src = const_cast<uint8_t *>(d_src);
+  // note: d_src is non-const in the kernel signatures (hysteresis_sharedm /
+  // hysteresis_opt take uint8_t*, not const uint8_t*), hence the cast
+  auto *src = const_cast<uint8_t *>(d_src);
 
-    #if defined(HYSTERESIS_NAIVE)
-    naive_hysteresis_linker<<<grid_dim, block_dim, 0, stream>>>(
-        src, width, height, d_dst, low_threshold, high_threshold);
-    #elif defined(HYSTERESIS_SHARED)
-    hysteresis_sharedm<<<grid_dim, block_dim, 0, stream>>>(
-        src, width, height, d_dst, low_threshold, high_threshold);
-    #elif defined(HYSTERESIS_OPTIMIZED) || defined(HYSTERESIS_PINNED)
-    // pinned reuses the optimized kernel, it only differs in host allocation
-    hysteresis_opt<<<grid_dim, block_dim, 0, stream>>>(
-        src, width, height, d_dst, low_threshold, high_threshold);
-    #endif
+#if defined(HYSTERESIS_NAIVE)
+  naive_hysteresis_linker<<<grid_dim, block_dim, 0, stream>>>(
+      src, width, height, d_dst, low_threshold, high_threshold);
+#elif defined(HYSTERESIS_SHARED)
+  hysteresis_sharedm<<<grid_dim, block_dim, 0, stream>>>(
+      src, width, height, d_dst, low_threshold, high_threshold);
+#elif defined(HYSTERESIS_OPTIMIZED) || defined(HYSTERESIS_PINNED)
+  // pinned reuses the optimized kernel, it only differs in host allocation
+  hysteresis_opt<<<grid_dim, block_dim, 0, stream>>>(
+      src, width, height, d_dst, low_threshold, high_threshold);
+#endif
 }
 
 #endif // #ifdef PIPELINE_FUSED
