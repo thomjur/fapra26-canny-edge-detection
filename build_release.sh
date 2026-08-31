@@ -42,7 +42,8 @@ WARMUP="${WARMUP:-0}"
 PIPELINE_FUSED="${PIPELINE_FUSED:-0}"
 BENCHMARK_RUNS="${BENCHMARK_RUNS:-1}"
 #ARCH="sm_120"
-ARCH="sm_75"
+#ARCH="sm_75"
+ARCH="native"
 
 # fused end-to-end pipeline benchmark (single H2D/D2H, no host sync between
 # stages) -- must be defined for EVERY translation unit, since each .cu file
