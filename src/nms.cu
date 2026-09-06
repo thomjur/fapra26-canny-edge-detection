@@ -155,7 +155,7 @@ __device__ __forceinline__ void quantize_direction(const float direction, int32_
     else if (deg < 67.5f)
     {
         dx = 1;
-        dy = -1;
+        dy = 1;
     } // 45 deg  (NE/SW)
     else if (deg < 112.5f)
     {
@@ -165,7 +165,7 @@ __device__ __forceinline__ void quantize_direction(const float direction, int32_
     else if (deg < 157.5f)
     {
         dx = 1;
-        dy = 1;
+        dy = -1;
     } // 135 deg (NW/SE)
     else
     {
@@ -177,7 +177,7 @@ __device__ __forceinline__ void quantize_direction(const float direction, int32_
 /// Lookup table: bucket index -> (dx, dy) offset along the gradient direction.
 /// 0 = 0 deg, 1 = 45 deg, 2 = 90 deg, 3 = 135 deg -- matches bucket_sobel_filter's encoding.
 __constant__ int32_t dir_bucket_dx[4] = {1, 1, 0, 1};
-__constant__ int32_t dir_bucket_dy[4] = {0, -1, 1, 1};
+__constant__ int32_t dir_bucket_dy[4] = {0, 1, 1, -1};
 
 /**
  * @brief Samples the magnitude buffer from global memory, returning 0 for
@@ -225,19 +225,48 @@ __device__ __forceinline__ void load_magnitude_tile(
     __syncthreads();
 }
 
-/**
- * @brief The suppression test itself: keep the magnitude only if it is a local
- * maximum along the gradient direction, otherwise zero it out.
- */
+#if false
+// Both pre-tie-break versions, kept for reference.
+//
+// Symmetric: safe but keeps every pixel of a plateau, so edges come out 2-3px
+// wide instead of 1px.
 __device__ __forceinline__ uint8_t suppress(const uint8_t magnitude, const uint8_t neighbor_a, const uint8_t neighbor_b)
 {
-    // produces 2-3px wide edges instead of 1px on plateaus (equal neighbor values)
     return (magnitude >= neighbor_a && magnitude >= neighbor_b) ? magnitude : 0;
-    #if false
-    // 1px-thin, but can create real gaps in the edge at corners/curves
-    // (see maple-leaf test) -- not safe to use without a global tie-break
+}
+
+// Asymmetric: 1px-thin, but the strict comparison is pinned to slot a, i.e. to
+// +d. Since +d is a forward offset in memory for buckets 0-2 and a backward one
+// for bucket 3, two neighboring plateau pixels with different buckets can
+// suppress each other and tear a gap into the edge (see maple-leaf test).
+__device__ __forceinline__ uint8_t suppress(const uint8_t magnitude, const uint8_t neighbor_a, const uint8_t neighbor_b)
+{
     return (magnitude > neighbor_a && magnitude >= neighbor_b) ? magnitude : 0;
-    #endif
+}
+#endif
+
+/**
+ * @brief The suppression test: keep the magnitude only if it is a local maximum
+ * along the gradient direction.
+ *
+ * Ties are broken by linear pixel index (higher index wins). Because that order
+ * is global, two neighbors can never suppress each other, unlike a tie-break
+ * anchored to @c +d, whose sign flips between direction buckets.
+ *
+ * @param magnitude Magnitude of the center pixel.
+ * @param neighbor_a Magnitude at @c +d.
+ * @param neighbor_b Magnitude at @c -d.
+ * @param a_ahead Whether @c neighbor_a sits at the higher linear index,
+ *                i.e. whether @c dy*width+dx is positive.
+ */
+__device__ __forceinline__ uint8_t suppress(const uint8_t magnitude,
+                                            const uint8_t neighbor_a,
+                                            const uint8_t neighbor_b,
+                                            const bool a_ahead)
+{
+    const bool wins_a = a_ahead ? (magnitude >  neighbor_a) : (magnitude >= neighbor_a);
+    const bool wins_b = a_ahead ? (magnitude >= neighbor_b) : (magnitude >  neighbor_b);
+    return (wins_a && wins_b) ? magnitude : 0;
 }
 
 //
@@ -268,7 +297,8 @@ __global__ void non_maximum_suppression(
     const uint8_t neighbor_a = sample_clamped(magnitude_buffer, width, height, x + dx, y + dy);
     const uint8_t neighbor_b = sample_clamped(magnitude_buffer, width, height, x - dx, y - dy);
 
-    out_nms_buffer[y * width + x] = suppress(magnitude, neighbor_a, neighbor_b);
+    const bool a_ahead = (dy * width + dx) > 0;
+    out_nms_buffer[y * width + x] = suppress(magnitude, neighbor_a, neighbor_b, a_ahead);
 }
 
 #endif // NMS_NAIVE && !NMS_BUCKET
@@ -301,7 +331,8 @@ __global__ void non_maximum_suppression_bucket(
     const uint8_t neighbor_a = sample_clamped(magnitude_buffer, width, height, x + dx, y + dy);
     const uint8_t neighbor_b = sample_clamped(magnitude_buffer, width, height, x - dx, y - dy);
 
-    out_nms_buffer[y * width + x] = suppress(magnitude, neighbor_a, neighbor_b);
+    const bool a_ahead = (dy * width + dx) > 0;
+    out_nms_buffer[y * width + x] = suppress(magnitude, neighbor_a, neighbor_b, a_ahead);
 }
 
 #endif // NMS_NAIVE && NMS_BUCKET
@@ -342,7 +373,8 @@ __global__ void non_maximum_suppression_shared(
     const uint8_t neighbor_a = tile[(ty + dy + NMS_RADIUS) * NMS_TILE_SIZE + (tx + dx + NMS_RADIUS)];
     const uint8_t neighbor_b = tile[(ty - dy + NMS_RADIUS) * NMS_TILE_SIZE + (tx - dx + NMS_RADIUS)];
 
-    out_nms_buffer[y * width + x] = suppress(magnitude, neighbor_a, neighbor_b);
+    const bool a_ahead = (dy * width + dx) > 0;
+    out_nms_buffer[y * width + x] = suppress(magnitude, neighbor_a, neighbor_b, a_ahead);
 }
 
 #endif // NMS_SHARED && !NMS_BUCKET
@@ -380,7 +412,8 @@ __global__ void non_maximum_suppression_shared_bucket(
     const uint8_t neighbor_a = tile[(ty + dy + NMS_RADIUS) * NMS_TILE_SIZE + (tx + dx + NMS_RADIUS)];
     const uint8_t neighbor_b = tile[(ty - dy + NMS_RADIUS) * NMS_TILE_SIZE + (tx - dx + NMS_RADIUS)];
 
-    out_nms_buffer[y * width + x] = suppress(magnitude, neighbor_a, neighbor_b);
+    const bool a_ahead = (dy * width + dx) > 0;
+    out_nms_buffer[y * width + x] = suppress(magnitude, neighbor_a, neighbor_b, a_ahead);
 }
 
 #endif // NMS_SHARED && NMS_BUCKET

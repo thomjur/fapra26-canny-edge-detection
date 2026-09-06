@@ -16,7 +16,7 @@
 
 GaussianResult gaussian_execute(const uint8_t *host_src, const int32_t width, const int32_t height)
 {
-    constexpr float sigma        = 1.4f;
+    constexpr float sigma        = 2.4f;
     constexpr uint32_t blur_size = BLUR_RADIUS * 2 + 1;
     const size_t img_size = static_cast<size_t>(width) * static_cast<size_t>(height) * sizeof(uint8_t);
 

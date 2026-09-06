@@ -104,13 +104,6 @@ int main(int argc, const char **argv)
     //
     // >>> SOBEL FILTER <<<
     //
-#if false
-    // First we manually load preprocessed Gaussian image for testing
-    const uint8_t *host_src_processed = stbi_load("assets/gaussian.jpg", &width, &height, &channels_in_file, 1); if (
-        host_src_processed == nullptr)
-        return -1; printf("Image loaded : %s\n", "gaussian_img.jpg"); printf("Size         : %d x %d\n", width, height);
-    printf("Channels     : %d (loaded as grayscale)\n", channels_in_file);
-#endif
 
 #ifdef WARMUP
     {
